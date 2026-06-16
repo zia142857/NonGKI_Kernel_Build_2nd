@@ -1,4 +1,4 @@
-name: Build Smartisan U3 Pro (Lineage OS 18 A11)
+name: Build Motorola EDGE S (MYUI A12)
 
 on:
   workflow_call:
@@ -6,26 +6,26 @@ on:
 
 env:
   # Device env
-  DEVICE_NAME : "smartisan_u3_pro"
-  DEVICE_CODENAME : "osborn"
+  DEVICE_NAME : "Motorola_edge_s"
+  DEVICE_CODENAME : "nio"
 
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "LLVM=1 LLVM_IAS=1"
+  EXTRA_CMDS : "cc=clang"
 
-  KERNEL_SOURCE : "https://github.com/anrui2032/android_kernel_smartisan_sdm660.git"
-  KERNEL_BRANCH : "lineage-18.1"
+  KERNEL_SOURCE : "https://github.com/tao1996/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH : "android12-dev"
 
-  CLANG_SOURCE : "https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b.git"
-  CLANG_BRANCH : "lineage-20.0"
+  CLANG_SOURCE : "https://github.com/xiangfeidexiaohuo/Snapdragon-LLVM.git"
+  CLANG_BRANCH : "10.0.9"
 
   GCC_GNU : false
-  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "android12L-release"
-  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "android12L-release"
+  GCC_64_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "lineage-19.1"
+  GCC_32_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "lineage-19.1"
 
   DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME : "smartisan-perf_defconfig"
+  DEFCONFIG_NAME : "nio_defconfig"
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
@@ -46,7 +46,7 @@ env:
   NEED_DTBO : false
   NEED_SAFE_DTBO : false
 
-  ROM_TEXT : "smartisanos_a11"
+  ROM_TEXT : "myui_a12"
 
   # Other env
   PYTHON_VERSION: "3" # Only 2(Ubuntu 22.04 and Ubuntu 20.04) or 3(Any OS Versions).
@@ -56,8 +56,8 @@ env:
 
   KERNELSU_METHOD: "shell" # shell, manual and only.
 
-  PATCHES_SOURCE: "author/source" # [your_name]/[your_patch] -> gooder123/NonGKI_Patcher
-  PATCHES_BRANCH: "branch" # [your_branch] -> main
+  PATCHES_SOURCE: "" # [your_name]/[your_patch] -> gooder123/NonGKI_Patcher
+  PATCHES_BRANCH: "" # [your_branch] -> main
 
   SUSFS_FOLDER_FIXED: "" # Fill in your patch prefix directory here. Leave it blank if there isn't one. -> your_folder
   SUSFS_PATCH_FIXED: "" # Fill in your patches here. If there are multiple patches, please separate them with a comma. Leave it blank if there isn't one. -> patch1,patch2
@@ -67,7 +67,7 @@ env:
 
   HOOK_METHOD: "syscall" # Manual hook method ->  syscall.
 
-  KERNEL_PATCH: "true" # If your kernel version is <= 4.9, you have the option of enabling the patch to patch the kernel_write and kernel_read functions.
+  KERNEL_PATCH: "false" # If your kernel version is <= 4.9, you have the option of enabling the patch to patch the kernel_write and kernel_read functions.
 
   KPM_ENABLE: "false" # Anyone devices.
   KPM_INLINE: "false" # Only use it for SukiSU-Ultra.
@@ -90,7 +90,7 @@ env:
 
 jobs:
   build-kernel:
-    name: Smartisan U3 Pro (Lineage OS 18 A11)
+    name: Motorola edge s (myui A12)
     runs-on: ubuntu-latest # u can changed to ubuntu 22.04, and need container set ubuntu-latest
     # container: archlinux/archlinux:latest # if u need use arch linux -> archlinux/archlinux:latest or ubuntu 20.04 -> ubuntu:focal
     env:
