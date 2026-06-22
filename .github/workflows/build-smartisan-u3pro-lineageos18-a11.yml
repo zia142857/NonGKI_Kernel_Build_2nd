@@ -82,11 +82,8 @@ jobs:
 
       - name: 🪛 Extra Kernel Options
         run: |
-          cd $GITHUB_WORKSPACE/device_kernel
-          # 先编译 dtc
-          make ARCH=arm64 scripts/dtc/dtc
-          # 再替换系统 dtc
-          sudo ln -sf $(pwd)/scripts/dtc/dtc /usr/bin/dtc
+          sudo apt-get install -y device-tree-compiler
+    dtc --version
 
       - name: 🚀 Build & Pack Process
         uses: ./.github/workflows/build-process
