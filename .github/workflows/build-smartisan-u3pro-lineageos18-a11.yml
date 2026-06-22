@@ -15,17 +15,17 @@ env:
   KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH : "lineage-23.2"
 
-  CLANG_SOURCE : "https://github.com/xiangfeidexiaohuo/Snapdragon-LLVM.git"
-  CLANG_BRANCH : "10.0.9"
+  CLANG_SOURCE : "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
+  CLANG_BRANCH : ""
 
   GCC_GNU : false
-  GCC_64_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "lineage-19.1"
-  GCC_32_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "lineage-19.1"
+  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "android12L-release"
+  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "android12L-release"
 
   DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME : "nio_defconfig"
+  DEFCONFIG_NAME : "vender/lito-perf_defconfig"
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
