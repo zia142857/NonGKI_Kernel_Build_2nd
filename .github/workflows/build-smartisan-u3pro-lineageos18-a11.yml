@@ -77,20 +77,4 @@ jobs:
 
       - name: 🪝 Patching Phase
         run: |
-          # 执行各模块补丁
-          # 注：保留原始 workflow 调用逻辑
-          echo "Applying Kernel patches..."
-
-      - name: 🪛 Extra Kernel Options
-        run: |
-          cd $GITHUB_WORKSPACE/device_kernel
-          sudo ln -sf $(pwd)/scripts/dtc/dtc /usr/bin/dtc
-
-      - name: 🚀 Build & Pack Process
-        uses: ./.github/workflows/build-process # 若需拆分可继续按需编写
-
-      - name: 🔩 Pack Process
-        uses: ./.github/workflows/pack-process
-
-      - name: ✏️ Upload Artifacts
-        uses: ./.github/workflows/upload-files
+          # 执行
