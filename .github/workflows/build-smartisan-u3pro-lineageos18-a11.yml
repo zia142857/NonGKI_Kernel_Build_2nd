@@ -10,7 +10,7 @@ env:
   DEVICE_CODENAME: "nio"
 
   CUSTOM_CMDS: "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS: "cc=clang DTC_EXT=/usr/bin/dtc DTC=/usr/bin/dtc"
+  EXTRA_CMDS: "DTC_EXT=/usr/bin/dtc DTC=/usr/bin/dtc"
 
   KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH: "lineage-23.2"
@@ -77,7 +77,7 @@ env:
   BASEBAND_GUARD_ENABLE: "false"
   BASEBAND_GUARD_BOOT: "false"
 
-  GENERATE_DTB: "true"
+  GENERATE_DTB: "false"
   GENERATE_CHIP: "qcom"
 
   BUILD_DEBUGGER: "false"
@@ -117,6 +117,14 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
           sudo apt-get install -y device-tree-compiler
+          # 清理 anykernel.sh 里针对 Galaxy Nexus 的无关操作
+          sed -i '/backup_file init.rc/d' Anykernel3/anykernel.sh
+          sed -i '/replace_string init.rc/d' Anykernel3/anykernel.sh
+          sed -i '/backup_file init.tuna.rc/d' Anykernel3/anykernel.sh
+          sed -i '/insert_line init.tuna.rc/d' Anykernel3/anykernel.sh
+          sed -i '/append_file init.tuna.rc/d' Anykernel3/anykernel.sh
+          sed -i '/backup_file fstab.tuna/d' Anykernel3/anykernel.sh
+          sed -i '/patch_fstab fstab.tuna/d' Anykernel3/anykernel.sh
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
