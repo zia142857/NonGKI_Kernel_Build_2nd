@@ -116,9 +116,9 @@ jobs:
 
       - name: 🪛 Extra Kernel Options
         run: |
-          # Only ${{ env.DEVICE_NAME }} use it.
           cd $GITHUB_WORKSPACE/device_kernel
-          # Nothing
+          # 用内核自带的 dtc 替换系统 dtc
+    sudo ln -sf $(pwd)/scripts/dtc/dtc /usr/bin/dtc
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
