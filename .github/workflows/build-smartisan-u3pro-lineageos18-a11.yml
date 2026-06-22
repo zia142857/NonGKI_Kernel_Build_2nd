@@ -17,13 +17,13 @@ env:
   # ==========================================
   KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH: "lineage-23.2"
-  
+
   CLANG_SOURCE: "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
   CLANG_BRANCH: ""
-  
+
   CUSTOM_CMDS: "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS: "cc=clang"
-  
+  EXTRA_CMDS: "cc=clang DTC_EXT=/usr/bin/dtc"
+
   GCC_GNU: false
   GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
   GCC_64_BRANCH: "android12L-release"
@@ -37,11 +37,11 @@ env:
   DEFCONFIG_FROM_BOOT: false
   BUILD_OTHER_CONFIG: "true"
   MERGE_CONFIG_FILES: "vendor/ext_config/moto-kona.config,vendor/ext_config/nio-default.config"
-  
+
   KERNELSU_AUTO_GET: "true"
   KERNELSU_AUTO_FORK: "xxksu"
   KERNELSU_METHOD: "shell"
-  
+
   SUSFS_ENABLE: false
   REKERNEL_ENABLE: "false"
   DROIDSPACES_ENABLE: "false"
@@ -77,16 +77,13 @@ jobs:
 
       - name: 🪝 Patching Phase
         run: |
-          # 执行各模块补丁
-          echo "Applying Kernel patches..."
+          # 暂时为空
 
       - name: 🪛 Extra Kernel Options
         run: |
-          sudo apt-get update
           sudo apt-get install -y device-tree-compiler
-          dtc --version
 
-      - name: 🚀 Build & Pack Process
+      - name: 🚀 Build Process
         uses: ./.github/workflows/build-process
 
       - name: 🔩 Pack Process
