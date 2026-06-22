@@ -77,4 +77,22 @@ jobs:
 
       - name: 🪝 Patching Phase
         run: |
-          # 执行
+          # 执行各模块补丁
+          echo "Applying Kernel patches..."
+
+      - name: 🪛 Extra Kernel Options
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          # 先编译 dtc
+          make ARCH=arm64 scripts/dtc/dtc
+          # 再替换系统 dtc
+          sudo ln -sf $(pwd)/scripts/dtc/dtc /usr/bin/dtc
+
+      - name: 🚀 Build & Pack Process
+        uses: ./.github/workflows/build-process
+
+      - name: 🔩 Pack Process
+        uses: ./.github/workflows/pack-process
+
+      - name: ✏️ Upload Artifacts
+        uses: ./.github/workflows/upload-files
