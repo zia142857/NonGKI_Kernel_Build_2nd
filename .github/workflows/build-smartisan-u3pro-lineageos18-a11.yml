@@ -12,8 +12,8 @@ env:
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "cc=clang"
 
-  KERNEL_SOURCE : "https://github.com/tao1996/android_kernel_motorola_sm8250.git"
-  KERNEL_BRANCH : "android12-dev"
+  KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH : "lineage-23.2"
 
   CLANG_SOURCE : "https://github.com/xiangfeidexiaohuo/Snapdragon-LLVM.git"
   CLANG_BRANCH : "10.0.9"
