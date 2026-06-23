@@ -1,140 +1,139 @@
-name: Build XXKSU YAML
+name: Build Motorola EDGE S (MYUI A12) - Clean Kernel Test
 
 on:
-  workflow_call:
   workflow_dispatch:
 
 env:
-  # Device env
-  DEVICE_NAME : "moto"
-  DEVICE_CODENAME : "nio"
+  DEVICE_NAME: "Motorola_edge_s"
+  DEVICE_CODENAME: "nio"
+  ROM_TEXT: "clean_test"
 
-  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "cc=clang"
+  KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH: "lineage-23.2"
 
-  KERNEL_SOURCE : "https://github.com/tao1996/android_kernel_motorola_sm8250.git"
-  KERNEL_BRANCH : "android12-dev"
+  CLANG_SOURCE: "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
 
-  CLANG_SOURCE : "https://github.com/xiangfeidexiaohuo/Snapdragon-LLVM.git"
-  CLANG_BRANCH : "10.0.9"
-
-  GCC_GNU : false
-  GCC_64_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "lineage-19.1"
-  GCC_32_SOURCE : "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "lineage-19.1"
-
-  DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME : "nio_defconfig"
-  DEFCONFIG_ORIGIN_IMAGE: ""
-  DEFCONFIG_FROM_BOOT: false
-
-  KERNELSU_SOURCE : ""
-  KERNELSU_BRANCH : ""
-
-  KERNELSU_AUTO_GET : "true" # if u want easy setting kernelsu, u can true.
-  KERNELSU_AUTO_FORK : "xxksu" # magic, rsuntk, next, resukisu and sukisu
-
-  SUSFS_ENABLE : false
-  SUSFS_FIXED : false
-
-  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
-  AK3_BRANCH : "master"
-
-  BOOT_SOURCE : ""
-
-  NEED_DTBO : false
-  NEED_SAFE_DTBO : false
-
-  ROM_TEXT : "rom_android"
-
-  # Other env
-  PYTHON_VERSION: "3" # Only 2(Ubuntu 22.04 and Ubuntu 20.04) or 3(Any OS Versions).
-
-  PACK_METHOD: "Anykernel3" # Anykernel3 need SOURCE and BRANCH, MKBOOTIMG needn't it.
-  PACK_KMODULES: "false" # if u want pack kernel modules (.ko) into Anykernel3.
-
-  KERNELSU_METHOD: "shell" # shell, manual and only.
-
-  PATCHES_SOURCE: "author/source" # [your_name]/[your_patch] -> gooder123/NonGKI_Patcher
-  PATCHES_BRANCH: "branch" # [your_branch] -> main
-
-  SUSFS_FOLDER_FIXED: "" # Fill in your patch prefix directory here. Leave it blank if there isn't one. -> your_folder
-  SUSFS_PATCH_FIXED: "" # Fill in your patches here. If there are multiple patches, please separate them with a comma. Leave it blank if there isn't one. -> patch1,patch2
-
-  REKERNEL_ENABLE: "false" # if u need Re:Kernel.
-
-  HOOK_METHOD: "syscall" # Manual hook method -> syscall.
-
-  KERNEL_PATCH: "false" # If your kernel version is <= 4.9, you have the option of enabling the patch to patch the kernel_write and kernel_read functions.
-
-  KPM_ENABLE: "false" # Anyone devices.
-  KPM_INLINE: "false" # Only use it for SukiSU-Ultra.
-  KPM_KPATCH_NEXT: "false" # If u want hook KPatch-Next in build step.
-  KPM_PATCH_SOURCE: "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/refs/heads/main/kpm/patch_linux" # If u want to use KPM Inline,so you need set patch exec file source -> raw.githubusercontent.com/Test/Test/patch .
-
-  BASEBAND_GUARD_ENABLE: "false" #if u want prevent unauthorized writes to critical partitions/device nodes.
-  BASEBAND_GUARD_BOOT: "false" #if u want to protect boot partition.
-
-  HIDE_STUFF: "false" # hide some of the features
-
-  GENERATE_DTB: "false" # if u kernel need DTB , but cannot auto generate it. (Only Anykernel3).
-  GENERATE_CHIP: "qcom" # only supported for qcom and mediatek.
-
-  BUILD_DEBUGGER: "false" # Output build errors.
-  SKIP_PATCH: "false" # Ignore errors found in Patch Debugger.
-
-  BUILD_OTHER_CONFIG: "false" # Merge config files.
-  MERGE_CONFIG_FILES: "vendor/debugfs.config,vendor/lahaina_QGKI.config"
-
-  FREE_MORE_SPACE: "false" # if u want get more space, enabled it.
+  GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH: "android12L-release"
+  GCC_32_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH: "android12L-release"
 
 jobs:
   build-kernel:
-    name: Build Kernel
-    runs-on: ubuntu-latest # u can changed to ubuntu 22.04, and need container set ubuntu-latest
-    # container: archlinux/archlinux:latest # if u need use arch linux -> archlinux/archlinux:latest or ubuntu 20.04 -> ubuntu:focal
-    env:
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_HARDLINK: "true"
+    name: Clean Kernel - Motorola edge s
+    runs-on: ubuntu-latest
 
     steps:
       - name: ⏰ Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: ⌛️ Compilation environment preparation
-        uses: ./.github/workflows/build-env
-
-      - name: ⚙️ Get neccssary tools
-        uses: ./.github/workflows/build-ready
-
-      - name: 🪝 Patch Kernel of SUSFS
-        uses: ./.github/workflows/patch-susfs
-
-      - name: 🔗 Patch for no-kprobe
-        uses: ./.github/workflows/patch-no-kprobe
-
-      - name: 🪛 Extra Kernel Options
+      - name: ⌛️ Install dependencies
         run: |
-          # Only ${{ env.DEVICE_NAME }} use it.
-          cd $GITHUB_WORKSPACE/device_kernel
-          # Nothing
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex \
+            gcc git libssl-dev libelf-dev lz4 \
+            python3 zip device-tree-compiler
 
-      - name: 🧰 Patch Kernel of Re:Kernel
-        uses: ./.github/workflows/patch-rekernel
+      - name: 📥 Clone kernel source
+        run: |
+          git clone --depth=1 -b ${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_SOURCE }} device_kernel
 
-      - name: 🔒 Patch Kernel of Baseband Guard
-        uses: ./.github/workflows/patch-baseband-guard
+      - name: 🔧 Download Clang
+        run: |
+          mkdir -p clang
+          curl -L "${{ env.CLANG_SOURCE }}" | tar -xz -C clang
 
-      - name: 🔧 Patch Hide Stuff
-        uses: ./.github/workflows/patch-hide-stuff
+      - name: 🔧 Download GCC
+        run: |
+          git clone --depth=1 -b ${{ env.GCC_64_BRANCH }} ${{ env.GCC_64_SOURCE }} gcc-64
+          git clone --depth=1 -b ${{ env.GCC_32_BRANCH }} ${{ env.GCC_32_SOURCE }} gcc-32
 
-      - name: 🚀 Build Process
-        uses: ./.github/workflows/build-process
+      - name: 🏗️ Build kernel
+        run: |
+          export PATH=$(pwd)/clang/bin:$PATH
+          export CROSS_COMPILE=$(pwd)/gcc-64/bin/aarch64-linux-android-
+          export CROSS_COMPILE_ARM32=$(pwd)/gcc-32/bin/arm-linux-androideabi-
 
-      - name: 🔩 Pack Process
-        uses: ./.github/workflows/pack-process
+          cd device_kernel
+
+          # 生成 defconfig
+          make O=out ARCH=arm64 \
+            CC="ccache clang" \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            DTC_EXT=/usr/bin/dtc \
+            DTC=/usr/bin/dtc \
+            vendor/kona-perf_defconfig
+
+          # 合并扩展配置
+          scripts/kconfig/merge_config.sh -O out/ -m out/.config \
+            arch/arm64/configs/vendor/ext_config/moto-kona.config \
+            arch/arm64/configs/vendor/ext_config/nio-default.config
+
+          # 启用 pstore 崩溃日志
+          scripts/config --file out/.config --enable CONFIG_PSTORE
+          scripts/config --file out/.config --enable CONFIG_PSTORE_CONSOLE
+          scripts/config --file out/.config --enable CONFIG_PSTORE_RAM
+
+          make O=out ARCH=arm64 olddefconfig \
+            CC="ccache clang" \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            DTC_EXT=/usr/bin/dtc \
+            DTC=/usr/bin/dtc
+
+          # 编译
+          make -j$(nproc --all) O=out ARCH=arm64 \
+            CC="ccache clang" \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            DTC_EXT=/usr/bin/dtc \
+            DTC=/usr/bin/dtc
+
+      - name: 🔧 Append DTB to Image
+        run: |
+          cd device_kernel
+          IMAGE_DIR="out/arch/arm64/boot"
+          DTB_DIR="$IMAGE_DIR/dts/vendor/qcom"
+          if ls $DTB_DIR/*.dtb 1>/dev/null 2>&1; then
+            cat $IMAGE_DIR/Image $DTB_DIR/*.dtb > $IMAGE_DIR/Image.gz-dtb
+            echo "DTB appended successfully"
+            ls -lh $IMAGE_DIR/Image.gz-dtb
+          else
+            echo "No DTB found"
+            find $IMAGE_DIR/dts/ -name "*.dtb" | head -10
+          fi
+
+      - name: 📦 Package AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+
+          # 清理无关内容
+          sed -i '/backup_file init.rc/d' AnyKernel3/anykernel.sh
+          sed -i '/replace_string init.rc/d' AnyKernel3/anykernel.sh
+          sed -i '/backup_file init.tuna.rc/d' AnyKernel3/anykernel.sh
+          sed -i '/insert_line init.tuna.rc/d' AnyKernel3/anykernel.sh
+          sed -i '/append_file init.tuna.rc/d' AnyKernel3/anykernel.sh
+          sed -i '/backup_file fstab.tuna/d' AnyKernel3/anykernel.sh
+          sed -i '/patch_fstab fstab.tuna/d' AnyKernel3/anykernel.sh
+          sed -i '/append_file fstab.tuna/d' AnyKernel3/anykernel.sh
+
+          # 启用 vendor_boot 刷写
+          sed -i 's/#BLOCK=vendor_boot;/BLOCK=vendor_boot;/' AnyKernel3/anykernel.sh
+          sed -i 's/#IS_SLOT_DEVICE=1;/IS_SLOT_DEVICE=1;/' AnyKernel3/anykernel.sh
+          sed -i 's/#RAMDISK_COMPRESSION=auto;/RAMDISK_COMPRESSION=auto;/' AnyKernel3/anykernel.sh
+          sed -i 's/#PATCH_VBMETA_FLAG=auto;/PATCH_VBMETA_FLAG=auto;/' AnyKernel3/anykernel.sh
+          sed -i 's/#reset_ak;/reset_ak;/' AnyKernel3/anykernel.sh
+          sed -i 's/#dump_boot; # use split_boot to skip ramdisk unpack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot/dump_boot;/' AnyKernel3/anykernel.sh
+          sed -i 's/#write_boot; # use flash_boot to skip ramdisk repack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot/write_boot;/' AnyKernel3/anykernel.sh
+
+          # 打包
+          cp device_kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+          cd AnyKernel3
+          TIME=$(date +"%Y%m%d%H%M%S")
+          zip -r9 ../nio-clean_test-${TIME}-AnyKernel3.zip * -x .git
+          echo "PACK_NAME=nio-clean_test-${TIME}-AnyKernel3.zip" >> $GITHUB_ENV
 
       - name: ✏️ Upload Artifacts
-        uses: ./.github/workflows/upload-files
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACK_NAME }}
+          path: ${{ env.PACK_NAME }}
