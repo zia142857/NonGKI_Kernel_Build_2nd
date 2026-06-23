@@ -75,7 +75,7 @@ env:
   BASEBAND_GUARD_ENABLE: "false"
   BASEBAND_GUARD_BOOT: "false"
 
-  GENERATE_DTB: "true"
+  GENERATE_DTB: "false"
   GENERATE_CHIP: "qcom"
 
   BUILD_DEBUGGER: "false"
@@ -123,7 +123,6 @@ jobs:
           sed -i '/backup_file fstab.tuna/d' Anykernel3/anykernel.sh
           sed -i '/patch_fstab fstab.tuna/d' Anykernel3/anykernel.sh
           sed -i '/append_file fstab.tuna/d' Anykernel3/anykernel.sh
-          # 启用 vendor_boot 刷写
           sed -i 's/#BLOCK=vendor_boot;/BLOCK=vendor_boot;/' Anykernel3/anykernel.sh
           sed -i 's/#IS_SLOT_DEVICE=1;/IS_SLOT_DEVICE=1;/' Anykernel3/anykernel.sh
           sed -i 's/#RAMDISK_COMPRESSION=auto;/RAMDISK_COMPRESSION=auto;/' Anykernel3/anykernel.sh
@@ -143,6 +142,20 @@ jobs:
 
       - name: 🚀 Build Process
         uses: ./.github/workflows/build-process
+
+      - name: 🔧 Append DTB to Image
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          IMAGE_DIR="out/arch/arm64/boot"
+          DTB_DIR="$IMAGE_DIR/dts/vendor/qcom"
+          if ls $DTB_DIR/*.dtb 1>/dev/null 2>&1; then
+            cat $IMAGE_DIR/Image $DTB_DIR/*.dtb > $IMAGE_DIR/Image.gz-dtb
+            echo "DTB appended to Image successfully"
+            ls -la $IMAGE_DIR/Image.gz-dtb
+          else
+            echo "No DTB files found in $DTB_DIR"
+            ls $IMAGE_DIR/dts/ || true
+          fi
 
       - name: 🔩 Pack Process
         uses: ./.github/workflows/pack-process
