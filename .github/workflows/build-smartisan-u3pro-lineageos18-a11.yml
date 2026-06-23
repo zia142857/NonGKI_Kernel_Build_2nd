@@ -115,6 +115,9 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
           sudo apt-get install -y device-tree-compiler
+          # 禁用强制模块签名，否则驱动无法加载导致启动失败
+          echo "CONFIG_MODULE_SIG_FORCE=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "# CONFIG_MODULE_SIG_ALL is not set" >> arch/arm64/configs/vendor/kona-perf_defconfig
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
