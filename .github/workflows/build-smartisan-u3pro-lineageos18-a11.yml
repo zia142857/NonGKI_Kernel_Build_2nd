@@ -12,7 +12,7 @@ env:
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "LLVM=1 LLVM_IAS=1"
 
-  KERNEL_SOURCE: "https://github.com/zia142857/android_kernel_moto_sm8250.git"
+  KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH: "lineage-23.2"
 
   CLANG_SOURCE : "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
