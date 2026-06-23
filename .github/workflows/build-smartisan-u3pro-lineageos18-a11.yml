@@ -75,7 +75,7 @@ env:
   BASEBAND_GUARD_ENABLE: "false"
   BASEBAND_GUARD_BOOT: "false"
 
-  GENERATE_DTB: "false"
+  GENERATE_DTB: "true"
   GENERATE_CHIP: "qcom"
 
   BUILD_DEBUGGER: "false"
@@ -123,6 +123,14 @@ jobs:
           sed -i '/backup_file fstab.tuna/d' Anykernel3/anykernel.sh
           sed -i '/patch_fstab fstab.tuna/d' Anykernel3/anykernel.sh
           sed -i '/append_file fstab.tuna/d' Anykernel3/anykernel.sh
+          # 启用 vendor_boot 刷写
+          sed -i 's/#BLOCK=vendor_boot;/BLOCK=vendor_boot;/' Anykernel3/anykernel.sh
+          sed -i 's/#IS_SLOT_DEVICE=1;/IS_SLOT_DEVICE=1;/' Anykernel3/anykernel.sh
+          sed -i 's/#RAMDISK_COMPRESSION=auto;/RAMDISK_COMPRESSION=auto;/' Anykernel3/anykernel.sh
+          sed -i 's/#PATCH_VBMETA_FLAG=auto;/PATCH_VBMETA_FLAG=auto;/' Anykernel3/anykernel.sh
+          sed -i 's/#reset_ak;/reset_ak;/' Anykernel3/anykernel.sh
+          sed -i 's/#dump_boot; # use split_boot to skip ramdisk unpack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot/dump_boot;/' Anykernel3/anykernel.sh
+          sed -i 's/#write_boot; # use flash_boot to skip ramdisk repack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot/write_boot;/' Anykernel3/anykernel.sh
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
