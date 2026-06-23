@@ -15,6 +15,7 @@ env:
   KERNEL_BRANCH: "lineage-23.2"
 
   CLANG_SOURCE: "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
+  CLANG_BRANCH: ""
 
   GCC_GNU: false
   GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
@@ -24,6 +25,8 @@ env:
 
   DEFCONFIG_SOURCE: ""
   DEFCONFIG_NAME: "vendor/kona-perf_defconfig"
+  DEFCONFIG_ORIGIN_IMAGE: ""
+  DEFCONFIG_FROM_BOOT: false
 
   KERNELSU_SOURCE: ""
   KERNELSU_BRANCH: ""
@@ -46,13 +49,31 @@ env:
 
   PYTHON_VERSION: "3"
 
-  # =========================
-  # 🔥 FIXED: 强制稳定模式
-  # =========================
-  PACK_METHOD: "Anykernel3"
+  PACK_METHOD: "MKBOOTIMG"
   PACK_KMODULES: "false"
 
   KERNELSU_METHOD: "shell"
+
+  PATCHES_SOURCE: "author/source"
+  PATCHES_BRANCH: "branch"
+
+  SUSFS_FOLDER_FIXED: ""
+  SUSFS_PATCH_FIXED: ""
+
+  REKERNEL_ENABLE: "false"
+  DROIDSPACES_ENABLE: "false"
+
+  HOOK_METHOD: "syscall"
+
+  KERNEL_PATCH: "false"
+
+  KPM_ENABLE: "false"
+  KPM_INLINE: "false"
+  KPM_KPATCH_NEXT: "false"
+  KPM_PATCH_SOURCE: "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/refs/heads/main/kpm/patch_linux"
+
+  BASEBAND_GUARD_ENABLE: "false"
+  BASEBAND_GUARD_BOOT: "false"
 
   GENERATE_DTB: "false"
   GENERATE_CHIP: "qcom"
@@ -63,10 +84,16 @@ env:
   BUILD_OTHER_CONFIG: "true"
   MERGE_CONFIG_FILES: "vendor/ext_config/moto-kona.config,vendor/ext_config/nio-default.config"
 
+  FREE_MORE_SPACE: "false"
+
 jobs:
   build-kernel:
     name: moto edge s (Lineage OS 23.2 A16)
     runs-on: ubuntu-latest
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
 
     steps:
       - name: ⏰ Checkout repository
@@ -86,6 +113,7 @@ jobs:
 
       - name: 🪛 Extra Kernel Options
         run: |
+          cd $GITHUB_WORKSPACE/device_kernel
           sudo apt-get install -y device-tree-compiler
 
       - name: 🧰 Patch Kernel of Re:Kernel
@@ -99,10 +127,6 @@ jobs:
 
       - name: 🚀 Build Process
         uses: ./.github/workflows/build-process
-
-      # =========================
-      # ❌ FIXED: 删除 DTB 手动拼接
-      # =========================
 
       - name: 🔩 Pack Process
         uses: ./.github/workflows/pack-process
