@@ -14,14 +14,14 @@ env:
   KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH: "lineage-23.2"
 
-  CLANG_SOURCE: "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
-  CLANG_BRANCH: ""
+  CLANG_SOURCE: "https://github.com/xiangfeidexiaohuo/Snapdragon-LLVM.git"
+  CLANG_BRANCH: "10.0.9"
 
   GCC_GNU: false
-  GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH: "android12L-release"
-  GCC_32_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH: "android12L-release"
+  GCC_64_SOURCE: "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH: "lineage-20.0"
+  GCC_32_SOURCE: "https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH: "lineage-20.0"
 
   DEFCONFIG_SOURCE: ""
   DEFCONFIG_NAME: "vendor/kona-perf_defconfig"
@@ -115,7 +115,6 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
           sudo apt-get install -y device-tree-compiler
-          # 禁用强制模块签名，否则驱动无法加载导致启动失败
           echo "CONFIG_MODULE_SIG_FORCE=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
           echo "# CONFIG_MODULE_SIG_ALL is not set" >> arch/arm64/configs/vendor/kona-perf_defconfig
 
