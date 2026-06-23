@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  DEVICE_NAME: "Motorola_edge_s"
-  DEVICE_CODENAME: "nio"
-  ROM_TEXT: "clean_test"
-
   KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH: "lineage-23.2"
 
@@ -57,7 +53,6 @@ jobs:
 
           cd device_kernel
 
-          # 生成 defconfig
           make O=out ARCH=arm64 \
             CC="ccache clang" \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -65,12 +60,10 @@ jobs:
             DTC=/usr/bin/dtc \
             vendor/kona-perf_defconfig
 
-          # 合并扩展配置
           scripts/kconfig/merge_config.sh -O out/ -m out/.config \
             arch/arm64/configs/vendor/ext_config/moto-kona.config \
             arch/arm64/configs/vendor/ext_config/nio-default.config
 
-          # 启用 pstore 崩溃日志
           scripts/config --file out/.config --enable CONFIG_PSTORE
           scripts/config --file out/.config --enable CONFIG_PSTORE_CONSOLE
           scripts/config --file out/.config --enable CONFIG_PSTORE_RAM
@@ -81,59 +74,14 @@ jobs:
             DTC_EXT=/usr/bin/dtc \
             DTC=/usr/bin/dtc
 
-          # 编译
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC="ccache clang" \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             DTC_EXT=/usr/bin/dtc \
             DTC=/usr/bin/dtc
 
-      - name: 🔧 Append DTB to Image
-        run: |
-          cd device_kernel
-          IMAGE_DIR="out/arch/arm64/boot"
-          DTB_DIR="$IMAGE_DIR/dts/vendor/qcom"
-          if ls $DTB_DIR/*.dtb 1>/dev/null 2>&1; then
-            cat $IMAGE_DIR/Image $DTB_DIR/*.dtb > $IMAGE_DIR/Image.gz-dtb
-            echo "DTB appended successfully"
-            ls -lh $IMAGE_DIR/Image.gz-dtb
-          else
-            echo "No DTB found"
-            find $IMAGE_DIR/dts/ -name "*.dtb" | head -10
-          fi
-
-      - name: 📦 Package AnyKernel3
-        run: |
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-
-          # 清理无关内容
-          sed -i '/backup_file init.rc/d' AnyKernel3/anykernel.sh
-          sed -i '/replace_string init.rc/d' AnyKernel3/anykernel.sh
-          sed -i '/backup_file init.tuna.rc/d' AnyKernel3/anykernel.sh
-          sed -i '/insert_line init.tuna.rc/d' AnyKernel3/anykernel.sh
-          sed -i '/append_file init.tuna.rc/d' AnyKernel3/anykernel.sh
-          sed -i '/backup_file fstab.tuna/d' AnyKernel3/anykernel.sh
-          sed -i '/patch_fstab fstab.tuna/d' AnyKernel3/anykernel.sh
-          sed -i '/append_file fstab.tuna/d' AnyKernel3/anykernel.sh
-
-          # 启用 vendor_boot 刷写
-          sed -i 's/#BLOCK=vendor_boot;/BLOCK=vendor_boot;/' AnyKernel3/anykernel.sh
-          sed -i 's/#IS_SLOT_DEVICE=1;/IS_SLOT_DEVICE=1;/' AnyKernel3/anykernel.sh
-          sed -i 's/#RAMDISK_COMPRESSION=auto;/RAMDISK_COMPRESSION=auto;/' AnyKernel3/anykernel.sh
-          sed -i 's/#PATCH_VBMETA_FLAG=auto;/PATCH_VBMETA_FLAG=auto;/' AnyKernel3/anykernel.sh
-          sed -i 's/#reset_ak;/reset_ak;/' AnyKernel3/anykernel.sh
-          sed -i 's/#dump_boot; # use split_boot to skip ramdisk unpack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot/dump_boot;/' AnyKernel3/anykernel.sh
-          sed -i 's/#write_boot; # use flash_boot to skip ramdisk repack, e.g. for dtb on devices with hdr v4 but no vendor_kernel_boot/write_boot;/' AnyKernel3/anykernel.sh
-
-          # 打包
-          cp device_kernel/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
-          cd AnyKernel3
-          TIME=$(date +"%Y%m%d%H%M%S")
-          zip -r9 ../nio-clean_test-${TIME}-AnyKernel3.zip * -x .git
-          echo "PACK_NAME=nio-clean_test-${TIME}-AnyKernel3.zip" >> $GITHUB_ENV
-
       - name: ✏️ Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.PACK_NAME }}
-          path: ${{ env.PACK_NAME }}
+          name: nio-clean_test-kernel
+          path: device_kernel/out/arch/arm64/boot/Image
