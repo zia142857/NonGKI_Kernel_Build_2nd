@@ -8,20 +8,20 @@ env:
   DEVICE_NAME: "moto_edge_s"
   DEVICE_CODENAME: "nio"
 
-  CUSTOM_CMDS: "LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=aarch64-linux-gnu-"
+  CUSTOM_CMDS: "LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=aarch64-linux-gnu-  CROSS_COMPILE=aarch64-linux-gnu- "
   EXTRA_CMDS: "DTC_EXT=/usr/bin/dtc DTC=/usr/bin/dtc"
 
   KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH: "lineage-23.2"
 
-    CLANG_SOURCE : "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
-  CLANG_BRANCH : ""
+  CLANG_SOURCE: "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
+  CLANG_BRANCH: ""
 
-  GCC_GNU : false
-  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "android12L-release"
-  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "android12L-release"
+  GCC_GNU: false
+  GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH: "android12L-release"
+  GCC_32_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH: "android12L-release"
 
   DEFCONFIG_SOURCE: ""
   DEFCONFIG_NAME: "vendor/kona-perf_defconfig"
@@ -117,11 +117,10 @@ jobs:
           sudo apt-get install -y device-tree-compiler
           echo "CONFIG_MODULE_SIG_FORCE=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
           echo "# CONFIG_MODULE_SIG_ALL is not set" >> arch/arm64/configs/vendor/kona-perf_defconfig
-echo "CONFIG_PSTORE=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-echo "CONFIG_PSTORE_RAM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-echo "CONFIG_PSTORE_CONSOLE=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-echo "CONFIG_PSTORE_PMSG=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-
+          echo "CONFIG_PSTORE=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_PSTORE_RAM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_PSTORE_CONSOLE=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_PSTORE_PMSG=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
