@@ -1,0 +1,252 @@
+name: Build Motorola Edge S Non-GKI KernelSU
+
+on:
+  workflow_dispatch:
+
+env:
+  # Device env
+  DEVICE_NAME: "motorola-edge-s"
+  DEVICE_CODENAME: "nio"
+
+  # Kernel source
+  KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH: "lineage-23.2"
+
+  # Toolchain. The workflow patches this project's build-env action so only
+  # this Android 16 clang directory is sparse-checked out.
+  CLANG_SOURCE: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
+  CLANG_BRANCH: "android16-release"
+  CLANG_VERSION: "clang-r547379"
+
+  GCC_GNU: "false"
+  GCC_64_SOURCE: ""
+  GCC_64_BRANCH: ""
+  GCC_32_SOURCE: ""
+  GCC_32_BRANCH: ""
+
+  CUSTOM_CMDS: "LLVM=1 LLVM_IAS=1"
+  EXTRA_CMDS: "LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip"
+
+  # Defconfig and Motorola nio fragments
+  DEFCONFIG_SOURCE: ""
+  DEFCONFIG_NAME: "vendor/kona-perf_defconfig"
+  DEFCONFIG_ORIGIN_IMAGE: ""
+  DEFCONFIG_FROM_BOOT: "false"
+  BUILD_OTHER_CONFIG: "true"
+  MERGE_CONFIG_FILES: "vendor/ext_config/moto-kona.config,vendor/ext_config/nio-default.config,vendor/ext_config/nio-ksu.config"
+  KERNEL_IMAGE_TARGET: "Image"
+
+  # KernelSU for non-GKI 4.19. v0.9.5 is the last official tiann/KernelSU
+  # release intended for non-GKI kernels.
+  KERNELSU_AUTO_GET: "false"
+  KERNELSU_SOURCE: "https://github.com/tiann/KernelSU.git"
+  KERNELSU_BRANCH: "v0.9.5"
+  KERNELSU_METHOD: "manual"
+
+  # Optional feature patches disabled for the known-good nio baseline.
+  SUSFS_ENABLE: "false"
+  SUSFS_FIXED: "false"
+  REKERNEL_ENABLE: "false"
+  DROIDSPACES_ENABLE: "false"
+  BASEBAND_GUARD_ENABLE: "false"
+  BASEBAND_GUARD_BOOT: "false"
+  KERNEL_PATCH: "false"
+  HOOK_METHOD: "syscall"
+  KPM_ENABLE: "false"
+  KPM_INLINE: "false"
+  KPM_KPATCH_NEXT: "false"
+  SKIP_PATCH: "false"
+
+  # AnyKernel3 packing. nio vendor_boot owns DTB, so the flashable zip only
+  # replaces the current slot boot kernel.
+  PACK_METHOD: "Anykernel3"
+  PACK_KMODULES: "false"
+  AK3_SOURCE: "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH: "master"
+  BOOT_SOURCE: ""
+  NEED_DTBO: "false"
+  NEED_SAFE_DTBO: "false"
+  GENERATE_DTB: "false"
+  GENERATE_CHIP: "qcom"
+  ROM_TEXT: "lineage-23.2-a16-ksu"
+
+  PYTHON_VERSION: "3"
+  BUILD_DEBUGGER: "true"
+  FREE_MORE_SPACE: "true"
+
+jobs:
+  build-kernel:
+    name: Build nio KernelSU AK3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: Checkout NonGKI builder
+        uses: actions/checkout@v4
+
+      - name: Patch builder actions for nio
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          build_env = Path(".github/workflows/build-env/action.yml")
+          lines = build_env.read_text(encoding="utf-8").splitlines()
+          gh_open = "${" + "{"
+          gh_close = "}" + "}"
+          clang_source = f"{gh_open} env.CLANG_SOURCE {gh_close}"
+          clang_branch = f"{gh_open} env.CLANG_BRANCH {gh_close}"
+          clang_version = f"{gh_open} env.CLANG_VERSION {gh_close}"
+
+          start = None
+          end = None
+          for index, line in enumerate(lines):
+              if 'env.CLANG_SOURCE' in line and 'android.googlesource.com' in line:
+                  start = index
+                  continue
+              if start is not None and index > start and line.lstrip().startswith("else"):
+                  end = index
+                  break
+          if start is None or end is None:
+              raise SystemExit("Could not locate build-env android clang clone block")
+          indent = lines[start][:len(lines[start]) - len(lines[start].lstrip())]
+          body = indent + "    "
+          replacement = [
+              f'{indent}elif [[ "{clang_source}" == *"android.googlesource.com"* ]]; then',
+              f"{body}git clone --depth=1 --filter=blob:none --no-checkout \\",
+              f'{body}  -b "{clang_branch}" \\',
+              f'{body}  "{clang_source}" \\',
+              f"{body}  clang-src",
+              f"{body}git -C clang-src sparse-checkout init --cone",
+              f'{body}git -C clang-src sparse-checkout set "{clang_version}"',
+              f"{body}git -C clang-src checkout",
+              f"{body}mkdir -p clang-custom",
+              f'{body}mv "clang-src/{clang_version}"/* clang-custom/',
+              f"{body}rm -rf clang-src",
+          ]
+          build_env.write_text("\n".join(lines[:start] + replacement + lines[end:]) + "\n", encoding="utf-8")
+
+          build_process = Path(".github/workflows/build-process/action.yml")
+          lines = build_process.read_text(encoding="utf-8").splitlines()
+          changed = 0
+          for index, line in enumerate(lines):
+              if "make -j$(nproc --all)" in line and "error.log" in line and "KERNEL_IMAGE_TARGET" not in line:
+                  lines[index] = line.replace(" 2>&1|tee error.log", ' ${{ env.KERNEL_IMAGE_TARGET }} 2>&1|tee error.log')
+                  changed += 1
+          if changed < 2:
+              raise SystemExit(f"Expected to patch clang and gcc build lines, patched {changed}")
+          build_process.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          upload = Path(".github/workflows/upload-files/action.yml")
+          upload.write_text(
+              upload.read_text(encoding="utf-8").replace("actions/upload-artifact@v7", "actions/upload-artifact@v4"),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Compilation environment preparation
+        uses: ./.github/workflows/build-env
+
+      - name: Get necessary tools
+        uses: ./.github/workflows/build-ready
+
+      - name: Add nio KernelSU config
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/device_kernel"
+          cat > "arch/${KERNEL_ARCH}/configs/vendor/ext_config/nio-ksu.config" <<'EOF'
+          CONFIG_KSU=y
+          CONFIG_OVERLAY_FS=y
+          CONFIG_KPROBES=y
+          EOF
+
+      - name: Build Process
+        uses: ./.github/workflows/build-process
+
+      - name: Verify nio KernelSU build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/device_kernel"
+          test -s "out/arch/${KERNEL_ARCH}/boot/Image"
+          grep -q "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" out/.config
+          grep -q "CONFIG_OVERLAY_FS=y" out/.config
+          grep -q "CONFIG_KSU=y" out/.config
+          grep -q "CONFIG_KPROBES=y" out/.config
+          {
+            echo "Kernel source:"
+            git log -1 --oneline
+            echo
+            echo "KernelSU source:"
+            git -C KernelSU describe --tags --always --dirty
+            git -C KernelSU log -1 --oneline
+            echo
+            echo "Clang:"
+            "${GITHUB_WORKSPACE}/clang-custom/bin/clang" --version | head -n1
+            echo
+            echo "Enabled config:"
+            grep -E "CONFIG_OVERLAY_FS=|CONFIG_KSU=|CONFIG_KPROBES=|CONFIG_HAVE_KPROBES=" out/.config || true
+            echo
+            echo "Image:"
+            ls -lh "out/arch/${KERNEL_ARCH}/boot/Image"
+          } | tee "${GITHUB_WORKSPACE}/build-info.txt"
+
+      - name: Pack Process
+        uses: ./.github/workflows/pack-process
+
+      - name: Fix AnyKernel3 script for nio
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}/device_kernel"
+          test -n "${PACK_NAME:-}"
+          rm -rf ak3-fixed
+          mkdir ak3-fixed
+          unzip -q "${PACK_NAME}" -d ak3-fixed
+          cat > ak3-fixed/anykernel.sh <<'EOF'
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+
+          properties() { '
+          kernel.string=LineageOS 23.2 nio KernelSU kernel
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=nio
+          device.name2=nio_retcn
+          device.name3=nio_retail
+          device.name4=nio_retus
+          device.name5=nio_reteu
+          device.name6=nio_global
+          device.name7=nio_amz
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+
+          BLOCK=boot;
+          IS_SLOT_DEVICE=1;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+
+          . tools/ak3-core.sh;
+
+          split_boot;
+          flash_boot;
+          EOF
+          cp "${GITHUB_WORKSPACE}/build-info.txt" ak3-fixed/build-info.txt
+          rm -f "${PACK_NAME}"
+          (cd ak3-fixed && 7za a -mx9 "../${PACK_NAME}" *)
+          rm -rf ak3-fixed
+          test -s "${PACK_NAME}"
+
+      - name: Upload Artifacts
+        uses: ./.github/workflows/upload-files
