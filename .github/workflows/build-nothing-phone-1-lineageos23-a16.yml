@@ -121,9 +121,25 @@ jobs:
           set -euo pipefail
           SETUP_URL="https://raw.githubusercontent.com/${{ inputs.ksunext_repo }}/${{ inputs.ksunext_branch }}/kernel/setup.sh"
           curl -fLSs "${SETUP_URL}" -o /tmp/ksunext-setup.sh
-          bash /tmp/ksunext-setup.sh "${{ inputs.ksunext_branch }}"
+          bash /tmp/ksunext-setup.sh
 
-          if [ -d KernelSU ]; then
+          KSU_REPO_DIR=""
+          if [ -d KernelSU-Next/.git ]; then
+            KSU_REPO_DIR="KernelSU-Next"
+          elif [ -d KernelSU/.git ]; then
+            KSU_REPO_DIR="KernelSU"
+          elif [ -d drivers/kernelsu/.git ]; then
+            KSU_REPO_DIR="drivers/kernelsu"
+          fi
+
+          if [ -n "${KSU_REPO_DIR}" ]; then
+            git -C "${KSU_REPO_DIR}" fetch --depth=1 origin "${{ inputs.ksunext_branch }}"
+            git -C "${KSU_REPO_DIR}" checkout --detach FETCH_HEAD
+          fi
+
+          if [ -d KernelSU-Next ]; then
+            git -C KernelSU-Next log -1 --oneline || true
+          elif [ -d KernelSU ]; then
             git -C KernelSU log -1 --oneline || true
           elif [ -d drivers/kernelsu ]; then
             git -C drivers/kernelsu log -1 --oneline || true
@@ -138,7 +154,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          KSU_FILE="$(find KernelSU drivers/kernelsu -path '*/infra/file_wrapper.c' -type f -print -quit 2>/dev/null || true)"
+          KSU_FILE="$(
+            find -L KernelSU KernelSU-Next drivers/kernelsu \
+              -path '*/infra/file_wrapper.c' \
+              -type f \
+              -print \
+              -quit 2>/dev/null || true
+          )"
           if [ -z "${KSU_FILE}" ]; then
             echo "KernelSU Next file_wrapper.c was not found" >&2
             exit 1
@@ -161,8 +183,13 @@ jobs:
                   raise SystemExit(f"failed to patch KernelSU Next {label}")
               text = updated
 
-          has_iopoll = re.search(r"\biopoll\b", fs_h) is not None
-          has_remap_file_range = re.search(r"\bremap_file_range\b", fs_h) is not None
+          fops_match = re.search(r"struct\s+file_operations\s*\{(?P<body>.*?)\n\};", fs_h, re.S)
+          if not fops_match:
+              raise SystemExit("failed to find struct file_operations in include/linux/fs.h")
+          fops = fops_match.group("body")
+
+          has_iopoll = re.search(r"\biopoll\b", fops) is not None
+          has_remap_file_range = re.search(r"\bremap_file_range\b", fops) is not None
 
           if not has_iopoll:
               remove_block(
@@ -302,7 +329,9 @@ jobs:
             echo
             if [[ "${{ inputs.enable_ksunext }}" == "true" ]]; then
               echo "KernelSU Next:"
-              if [ -d "${KERNEL_DIR}/KernelSU" ]; then
+              if [ -d "${KERNEL_DIR}/KernelSU-Next" ]; then
+                git -C "${KERNEL_DIR}/KernelSU-Next" log -1 --oneline || true
+              elif [ -d "${KERNEL_DIR}/KernelSU" ]; then
                 git -C "${KERNEL_DIR}/KernelSU" log -1 --oneline || true
               elif [ -d "${KERNEL_DIR}/drivers/kernelsu" ]; then
                 git -C "${KERNEL_DIR}/drivers/kernelsu" log -1 --oneline || true
