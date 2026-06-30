@@ -98,7 +98,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Compilation environment preparation
         uses: ./.github/workflows/build-env
@@ -150,14 +150,18 @@ jobs:
           )
           text = replace_regex(
               text,
-              r"""#define WARNING_IF_NOT_NULL_TERMINATED\(nm, propname\)\s*\\\s*
-\s*WARNING\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)\s*
-#define ERROR_IF_NOT_NULL_TERMINATED\(nm, propname\)\s*\\\s*
-\s*ERROR\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)""",
-              """#define WARNING_IF_NOT_NULL_TERMINATED(nm, propname) \\
-\tWARNING(nm, check_is_null_terminated, (propname))
-#define ERROR_IF_NOT_NULL_TERMINATED(nm, propname) \\
-\tERROR(nm, check_is_null_terminated, (propname))""",
+              (
+                  r"#define WARNING_IF_NOT_NULL_TERMINATED\(nm, propname\)\s*\\\s*\n"
+                  r"\s*WARNING\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)\s*\n"
+                  r"#define ERROR_IF_NOT_NULL_TERMINATED\(nm, propname\)\s*\\\s*\n"
+                  r"\s*ERROR\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)"
+              ),
+              (
+                  "#define WARNING_IF_NOT_NULL_TERMINATED(nm, propname) \\\n"
+                  "\tWARNING(nm, check_is_null_terminated, (propname))\n"
+                  "#define ERROR_IF_NOT_NULL_TERMINATED(nm, propname) \\\n"
+                  "\tERROR(nm, check_is_null_terminated, (propname))"
+              ),
               "WARNING(nm, check_is_null_terminated, (propname))",
               "dtc null-terminated warning/error macros",
           )
