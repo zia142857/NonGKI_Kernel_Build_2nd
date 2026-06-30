@@ -132,6 +132,84 @@ jobs:
             exit 1
           fi
 
+      - name: Patch KernelSU Next file wrapper compatibility
+        if: ${{ inputs.enable_ksunext }}
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+
+          KSU_FILE="$(find KernelSU drivers/kernelsu -path '*/infra/file_wrapper.c' -type f -print -quit 2>/dev/null || true)"
+          if [ -z "${KSU_FILE}" ]; then
+            echo "KernelSU Next file_wrapper.c was not found" >&2
+            exit 1
+          fi
+
+          python3 - "${KSU_FILE}" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          ksu_file = Path(sys.argv[1])
+          fs_h = Path("include/linux/fs.h").read_text(errors="ignore")
+          text = ksu_file.read_text()
+          original = text
+
+          def remove_block(pattern, label, needle):
+              global text
+              updated, count = re.subn(pattern, "\n", text, count=1, flags=re.S)
+              if count == 0 and needle in text:
+                  raise SystemExit(f"failed to patch KernelSU Next {label}")
+              text = updated
+
+          has_iopoll = re.search(r"\biopoll\b", fs_h) is not None
+          has_remap_file_range = re.search(r"\bremap_file_range\b", fs_h) is not None
+
+          if not has_iopoll:
+              remove_block(
+                  r"\n#if LINUX_VERSION_CODE >= KERNEL_VERSION\(6,\s*1,\s*0\)\n"
+                  r"static int ksu_wrapper_iopoll\(.*?\n#endif\n"
+                  r"(?=\n#if LINUX_VERSION_CODE < KERNEL_VERSION\(6,\s*6,\s*0\))",
+                  "iopoll wrapper",
+                  "ksu_wrapper_iopoll",
+              )
+              remove_block(
+                  r"\n#if LINUX_VERSION_CODE >= KERNEL_VERSION\(6,\s*1,\s*0\)\n"
+                  r"\s*p->ops\.iopoll = .*?\n#endif",
+                  "iopoll operation",
+                  ".iopoll",
+              )
+
+          if not has_remap_file_range:
+              remove_block(
+                  r"\n#if LINUX_VERSION_CODE >= KERNEL_VERSION\(4,\s*20,\s*0\)\n"
+                  r"// no REMAP_FILE_DEDUP:.*?\n#endif\n"
+                  r"(?=\n#if LINUX_VERSION_CODE >= KERNEL_VERSION\(4,\s*19,\s*0\))",
+                  "remap_file_range wrapper",
+                  "ksu_wrapper_remap_file_range",
+              )
+              remove_block(
+                  r"\n#if LINUX_VERSION_CODE >= KERNEL_VERSION\(4,\s*20,\s*0\)\n"
+                  r"\s*p->ops\.remap_file_range = .*?\n#endif",
+                  "remap_file_range operation",
+                  ".remap_file_range",
+              )
+
+          if text != original:
+              ksu_file.write_text(text)
+
+          print(f"KernelSU Next file wrapper: {ksu_file}")
+          print(f"file_operations.iopoll present: {has_iopoll}")
+          print(f"file_operations.remap_file_range present: {has_remap_file_range}")
+          print(f"patched: {text != original}")
+          PY
+
+          if ! grep -qw "iopoll" include/linux/fs.h; then
+            ! grep -q "iopoll" "${KSU_FILE}"
+          fi
+          if ! grep -qw "remap_file_range" include/linux/fs.h; then
+            ! grep -q "remap_file_range" "${KSU_FILE}"
+          fi
+
       - name: Configure kernel
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
