@@ -1,141 +1,439 @@
-name: Build Nothing Phone (1) (LineageOS 23.0 A16)
+name: Build Motorola Edge S kernel
 
 on:
-  workflow_call:
   workflow_dispatch:
+    inputs:
+      kernel_repo:
+        description: Kernel repository
+        required: true
+        default: LineageOS/android_kernel_motorola_sm8250
+      kernel_branch:
+        description: Kernel branch
+        required: true
+        default: lineage-23.2
+      device_repo:
+        description: Device tree repository
+        required: true
+        default: LineageOS/android_device_motorola_nio
+      device_branch:
+        description: Device tree branch
+        required: true
+        default: lineage-23.2
+      common_repo:
+        description: Common device tree repository
+        required: true
+        default: LineageOS/android_device_motorola_sm8250-common
+      common_branch:
+        description: Common device tree branch
+        required: true
+        default: lineage-23.2
+      clang_branch:
+        description: Android clang branch
+        required: true
+        default: android16-release
+      clang_version:
+        description: Android clang directory to use
+        required: true
+        default: clang-r547379
+      enable_ksunext:
+        description: Enable KernelSU Next
+        required: true
+        type: boolean
+        default: true
+      ksunext_repo:
+        description: KernelSU Next repository
+        required: true
+        default: KernelSU-Next/KernelSU-Next
+      ksunext_branch:
+        description: KernelSU Next branch or tag
+        required: true
+        default: next
 
-env:
-  # Device env
-  DEVICE_NAME : "nothing_phone_1"
-  DEVICE_CODENAME : "spacewar"
+permissions:
+  contents: read
 
-  CUSTOM_CMDS : "CROSS_COMPILE=aarch64-linux-gnu- CLANG_TRIPLE=aarch64-linux-gnu-"
-  EXTRA_CMDS : "LLVM=1 LLVM_IAS=1"
-
-  KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_nothing_sm7325.git"
-  KERNEL_BRANCH : "lineage-23.0"
-
-  CLANG_SOURCE : "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
-  CLANG_BRANCH : ""
-
-  GCC_GNU : false
-  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "android12L-release"
-  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "android12L-release"
-
-  DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME : "vendor/lahaina-qgki_defconfig"
-  DEFCONFIG_ORIGIN_IMAGE: ""
-  DEFCONFIG_FROM_BOOT: false
-
-  KERNELSU_SOURCE : ""
-  KERNELSU_BRANCH : ""
-
-  KERNELSU_AUTO_GET : "true" # if u want easy setting kernelsu, u can true.
-  KERNELSU_AUTO_FORK : "resukisu" # xxksu, rsuntk, next, resukisu and sukisu
-
-  SUSFS_ENABLE : true
-  SUSFS_FIXED : false
-
-  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
-  AK3_BRANCH : "master"
-
-  BOOT_SOURCE : ""
-
-  NEED_DTBO : false
-  NEED_SAFE_DTBO : false
-
-  ROM_TEXT : "lineageos23_a16"
-
-  # Other env
-  PYTHON_VERSION: "3" # Only 2(Ubuntu 22.04 and Ubuntu 20.04) or 3(Any OS Versions).
-
-  PACK_METHOD: "Anykernel3" # Anykernel3 need SOURCE and BRANCH, MKBOOTIMG needn't it.
-  PACK_KMODULES: "false" # if u want pack kernel modules (.ko) into Anykernel3.
-
-  KERNELSU_METHOD: "shell" # shell, manual and only.
-
-  PATCHES_SOURCE: "" # [your_name]/[your_patch] -> gooder123/NonGKI_Patcher
-  PATCHES_BRANCH: "" # [your_branch] -> main
-
-  SUSFS_FOLDER_FIXED: "" # Fill in your patch prefix directory here. Leave it blank if there isn't one. -> your_folder
-  SUSFS_PATCH_FIXED: "" # Fill in your patches here. If there are multiple patches, please separate them with a comma. Leave it blank if there isn't one. -> patch1,patch2
-
-  REKERNEL_ENABLE: "false" # if u need Re:Kernel.
-  DROIDSPACES_ENABLE: "false" # if u need Droidspaces or LXC/Docker.
-
-  HOOK_METHOD: "syscall" # Manual hook method -> syscall.
-
-  KERNEL_PATCH: "false" # If your kernel version is <= 4.9, you have the option of enabling the patch to patch the kernel_write and kernel_read functions.
-
-  KPM_ENABLE: "false" # Anyone devices.
-  KPM_INLINE: "false" # Only use it for SukiSU-Ultra.
-  KPM_KPATCH_NEXT: "false" # If u want hook KPatch-Next in build step.
-  KPM_PATCH_SOURCE: "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/refs/heads/main/kpm/patch_linux" # If u want to use KPM Inline,so you need set patch exec file source -> raw.githubusercontent.com/Test/Test/patch .
-
-  BASEBAND_GUARD_ENABLE: "false" #if u want prevent unauthorized writes to critical partitions/device nodes.
-  BASEBAND_GUARD_BOOT: "false" #if u want to protect boot partition.
-
-  GENERATE_DTB: "true" # if u kernel need DTB , but cannot auto generate it. (Only Anykernel3).
-  GENERATE_CHIP: "qcom" # only supported for qcom and mediatek.
-
-  BUILD_DEBUGGER: "false" # Output build errors.
-  SKIP_PATCH: "false" # Ignore errors found in Patch Debugger.
-
-  BUILD_OTHER_CONFIG: "false" # Merge config files.
-  MERGE_CONFIG_FILES: "vendor/debugfs.config,vendor/lahaina_QGKI.config"
-
-  FREE_MORE_SPACE: "false" # if u want get more space, enabled it.
+concurrency:
+  group: nio-kernel-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-kernel:
-    name: Nothing Phone (1) (LineageOS 23.0 A16)
-    runs-on: ubuntu-latest # u can changed to ubuntu 22.04, and need container set ubuntu-latest
-    # container: archlinux/archlinux:latest # if u need use arch linux -> archlinux/archlinux:latest or ubuntu 20.04 -> ubuntu:focal
+  build:
+    name: Build AnyKernel3 flashable kernel zip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
     env:
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_HARDLINK: "true"
+      ARCH: arm64
+      SUBARCH: arm64
+      KERNEL_DIR: ${{ github.workspace }}/kernel/motorola/sm8250
+      OUT_DIR: ${{ github.workspace }}/out
+      CLANG_DIR: ${{ github.workspace }}/toolchains/clang
+      CLANG_VERSION: ${{ inputs.clang_version }}
+      ANYKERNEL_DIR: ${{ github.workspace }}/AnyKernel3
+      DEVICE_DIR: ${{ github.workspace }}/device/motorola/nio
+      COMMON_DIR: ${{ github.workspace }}/device/motorola/sm8250-common
+      DEFCONFIG: vendor/kona-perf_defconfig
+      CONFIG_FRAGMENTS: vendor/ext_config/moto-kona.config vendor/ext_config/nio-default.config
+      MAKE_TARGETS: Image dtbs modules
 
     steps:
-      - name: ⏰ Checkout repository
-        uses: actions/checkout@v6
-
-      - name: ⌛️ Compilation environment preparation
-        uses: ./.github/workflows/build-env
-
-      - name: ⚙️ Get neccssary tools
-        uses: ./.github/workflows/build-ready
-
-      - name: 🪝 Patch Kernel of SUSFS
-        uses: ./.github/workflows/patch-susfs
-
-      - name: 🔗 Patch for no-kprobe
-        uses: ./.github/workflows/patch-no-kprobe
-
-      - name: 🪛 Extra Kernel Options
+      - name: Prepare packages
         run: |
-          # Only ${{ env.DEVICE_NAME }} use it.
-          cd $GITHUB_WORKSPACE/device_kernel
-          # Clang 21 compatibility
-          sed -i '/hif_err("CE handle is null");/{n;s/return A_ERROR;/return QDF_STATUS_E_NULL_VALUE;/;}' drivers/staging/qca-wifi-host-cmn/hif/src/ce/ce_main.c
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            bison \
+            build-essential \
+            ca-certificates \
+            ccache \
+            curl \
+            flex \
+            git \
+            libelf-dev \
+            libssl-dev \
+            lld \
+            llvm \
+            python3 \
+            rsync \
+            xz-utils \
+            zip
 
-      - name: 🧰 Patch Kernel of Re:Kernel
-        uses: ./.github/workflows/patch-rekernel
+      - name: Clone kernel source
+        run: |
+          git clone --depth=1 \
+            --branch "${{ inputs.kernel_branch }}" \
+            "https://github.com/${{ inputs.kernel_repo }}.git" \
+            "${KERNEL_DIR}"
 
-      - name: 💿 Patch Kernel of Droidspaces
-        uses: ./.github/workflows/patch-droidspaces
+      - name: Clone device trees
+        run: |
+          git clone --depth=1 \
+            --branch "${{ inputs.device_branch }}" \
+            "https://github.com/${{ inputs.device_repo }}.git" \
+            "${DEVICE_DIR}"
+          git clone --depth=1 \
+            --branch "${{ inputs.common_branch }}" \
+            "https://github.com/${{ inputs.common_repo }}.git" \
+            "${COMMON_DIR}"
 
-      - name: 🔒 Patch Kernel of Baseband Guard
-        uses: ./.github/workflows/patch-baseband-guard
+      - name: Clone Android clang
+        run: |
+          git clone --depth=1 --filter=blob:none --no-checkout \
+            --branch "${{ inputs.clang_branch }}" \
+            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
+            "${CLANG_DIR}"
+          git -C "${CLANG_DIR}" sparse-checkout init --cone
+          git -C "${CLANG_DIR}" sparse-checkout set "${CLANG_VERSION}"
+          git -C "${CLANG_DIR}" checkout
 
-      - name: 🚀 Build Process
-        uses: ./.github/workflows/build-process
+      - name: Select clang
+        run: |
+          set -euo pipefail
+          PREFERRED_CLANG="${CLANG_DIR}/${CLANG_VERSION}"
+          if [ ! -x "${PREFERRED_CLANG}/bin/clang" ]; then
+            echo "No usable Android clang found at ${PREFERRED_CLANG}" >&2
+            exit 1
+          fi
+          echo "CLANG_PREBUILT=${PREFERRED_CLANG}" >> "${GITHUB_ENV}"
+          "${PREFERRED_CLANG}/bin/clang" --version
 
-      - name: 🔩 Pack Process
-        uses: ./.github/workflows/pack-process
+      - name: Validate nio kernel configuration
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          test -f "arch/arm64/configs/${DEFCONFIG}"
+          for fragment in ${CONFIG_FRAGMENTS}; do
+            test -f "arch/arm64/configs/${fragment}"
+          done
+          grep -R "nio-default.config" "${DEVICE_DIR}/BoardConfig.mk"
+          grep -R "TARGET_KERNEL_CONFIG" "${COMMON_DIR}/BoardConfigCommon.mk"
+          grep -R "CONFIG_NIO_DTB=y" "arch/arm64/configs/vendor/ext_config/nio-default.config"
 
-      - name: ✏️ Upload Artifacts
+      - name: Patch bundled dtc null-termination check
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
 
-        uses: ./.github/workflows/upload-files
+          path = Path("scripts/dtc/checks.c")
+          text = path.read_text()
+          original = text
+
+          text = re.sub(
+              r'static void check_is_null_terminated\(struct check \*c,\s*'
+              r'struct node \*root,\s*'
+              r'struct node \*node\)',
+              'static void check_is_null_terminated(struct check *c, struct dt_info *dti,\n'
+              '\t\t\t    struct node *node)',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'FAIL\(c,\s*"\\"%s\\"\s+property in %s is not null terminated",\s*'
+              r'propname,\s*node->fullpath\);',
+              'FAIL(c, dti, node, "\\"%s\\" property in %s is not null terminated",\n'
+              '\t     propname, node->fullpath);',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'WARNING\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)',
+              'WARNING(nm, check_is_null_terminated, (propname))',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'ERROR\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)',
+              'ERROR(nm, check_is_null_terminated, (propname))',
+              text,
+              count=1,
+          )
+
+          if text == original:
+              raise SystemExit("dtc checks.c patch did not match this source tree")
+
+          path.write_text(text)
+          PY
+
+          grep -Fq 'FAIL(c, dti, node, "\"%s\" property in %s is not null terminated"' scripts/dtc/checks.c
+          grep -Fq 'static void check_is_null_terminated(struct check *c, struct dt_info *dti,' scripts/dtc/checks.c
+          grep -Fq 'WARNING(nm, check_is_null_terminated, (propname))' scripts/dtc/checks.c
+          grep -Fq 'ERROR(nm, check_is_null_terminated, (propname))' scripts/dtc/checks.c
+          ! grep -Fq 'WARNING(nm, NULL, check_is_null_terminated' scripts/dtc/checks.c
+          ! grep -Fq 'ERROR(nm, NULL, check_is_null_terminated' scripts/dtc/checks.c
+
+      - name: Add KernelSU Next
+        if: ${{ inputs.enable_ksunext }}
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          SETUP_URL="https://raw.githubusercontent.com/${{ inputs.ksunext_repo }}/${{ inputs.ksunext_branch }}/kernel/setup.sh"
+          curl -fLSs "${SETUP_URL}" -o /tmp/ksunext-setup.sh
+          bash /tmp/ksunext-setup.sh "${{ inputs.ksunext_branch }}"
+
+          if [ -d KernelSU ]; then
+            git -C KernelSU log -1 --oneline || true
+          elif [ -d drivers/kernelsu ]; then
+            git -C drivers/kernelsu log -1 --oneline || true
+          else
+            echo "KernelSU Next setup did not create a known source directory" >&2
+            exit 1
+          fi
+
+      - name: Configure kernel
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          export PATH="${CLANG_PREBUILT}/bin:${PATH}"
+
+          make O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            "${DEFCONFIG}"
+
+          FRAGMENT_PATHS=()
+          for fragment in ${CONFIG_FRAGMENTS}; do
+            FRAGMENT_PATHS+=("arch/arm64/configs/${fragment}")
+          done
+
+          KSU_FRAGMENT=()
+          if [[ "${{ inputs.enable_ksunext }}" == "true" ]]; then
+            cat > "${OUT_DIR}/ksunext.config" <<'EOF'
+          CONFIG_KPROBES=y
+          CONFIG_KSU=y
+          EOF
+            KSU_FRAGMENT=("${OUT_DIR}/ksunext.config")
+          fi
+
+          ./scripts/kconfig/merge_config.sh -m -O "${OUT_DIR}" "${OUT_DIR}/.config" "${FRAGMENT_PATHS[@]}" "${KSU_FRAGMENT[@]}"
+
+          make O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            olddefconfig
+
+          grep -q "CONFIG_NIO_DTB=y" "${OUT_DIR}/.config"
+          grep -q "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" "${OUT_DIR}/.config"
+          grep -q "CONFIG_BUILD_ARM64_DT_OVERLAY=y" "${OUT_DIR}/.config"
+          if [[ "${{ inputs.enable_ksunext }}" == "true" ]]; then
+            grep -q "CONFIG_KPROBES=y" "${OUT_DIR}/.config"
+            grep -q "CONFIG_KSU=y" "${OUT_DIR}/.config"
+          fi
+
+      - name: Build kernel
+        working-directory: ${{ env.KERNEL_DIR }}
+        env:
+          KBUILD_BUILD_USER: lineage
+          KBUILD_BUILD_HOST: github-actions
+        run: |
+          set -euo pipefail
+          export PATH="${CLANG_PREBUILT}/bin:${PATH}"
+          unset DTC DTC_EXT
+          rm -f "${OUT_DIR}/scripts/dtc/dtc" "${OUT_DIR}/scripts/dtc/"*.o || true
+
+          make -j"$(nproc)" O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            Image modules
+
+          make -j1 O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            V=1 \
+            dtbs
+
+      - name: Collect artifacts
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/artifact"
+          MODULE_DIR="${ARTIFACT_DIR}/modules"
+          DTB_DIR="${ARTIFACT_DIR}/dtb"
+          DTBO_DIR="${ARTIFACT_DIR}/dtbo"
+          mkdir -p "${MODULE_DIR}" "${DTB_DIR}" "${DTBO_DIR}"
+
+          IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
+          test -s "${IMAGE}"
+          cp "${IMAGE}" "${ARTIFACT_DIR}/Image"
+
+          find "${OUT_DIR}/arch/arm64/boot/dts/vendor/qcom" -type f -name "*.dtb" -print -exec cp -t "${DTB_DIR}" {} +
+          find "${OUT_DIR}/arch/arm64/boot/dts/vendor/qcom" -type f -name "*.dtbo" -print -exec cp -t "${DTBO_DIR}" {} +
+          find "${OUT_DIR}" -type f -name "*.ko" -print -exec cp -t "${MODULE_DIR}" {} +
+
+          test "$(find "${DTB_DIR}" -type f -name '*.dtb' | wc -l)" -gt 0
+          test "$(find "${DTBO_DIR}" -type f -name '*.dtbo' | wc -l)" -gt 0
+          test "$(find "${MODULE_DIR}" -type f -name '*.ko' | wc -l)" -gt 0
+
+          {
+            echo "Kernel source:"
+            git -C "${KERNEL_DIR}" log -1 --oneline
+            echo
+            if [[ "${{ inputs.enable_ksunext }}" == "true" ]]; then
+              echo "KernelSU Next:"
+              if [ -d "${KERNEL_DIR}/KernelSU" ]; then
+                git -C "${KERNEL_DIR}/KernelSU" log -1 --oneline || true
+              elif [ -d "${KERNEL_DIR}/drivers/kernelsu" ]; then
+                git -C "${KERNEL_DIR}/drivers/kernelsu" log -1 --oneline || true
+              else
+                echo "enabled, source directory not found"
+              fi
+              grep -E "CONFIG_KSU=|CONFIG_KPROBES=" "${OUT_DIR}/.config" || true
+              echo
+            fi
+            echo "Clang:"
+            "${CLANG_PREBUILT}/bin/clang" --version | head -n1
+            echo
+            echo "Image:"
+            ls -lh "${ARTIFACT_DIR}/Image"
+            echo
+            echo "DTB count:"
+            find "${DTB_DIR}" -type f -name "*.dtb" | wc -l
+            echo
+            echo "DTBO count:"
+            find "${DTBO_DIR}" -type f -name "*.dtbo" | wc -l
+            echo
+            echo "Module count:"
+            find "${MODULE_DIR}" -type f -name "*.ko" | wc -l
+          } | tee "${ARTIFACT_DIR}/build-info.txt"
+
+      - name: Package AnyKernel3 flashable zip
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/artifact"
+          BUILT_IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
+          ZIP_SUFFIX="lineage-23.2"
+          KERNEL_STRING="LineageOS 23.2 nio kernel"
+          if [[ "${{ inputs.enable_ksunext }}" == "true" ]]; then
+            ZIP_SUFFIX="${ZIP_SUFFIX}-ksunext"
+            KERNEL_STRING="${KERNEL_STRING} + KernelSU Next"
+          fi
+          ZIP_NAME="AnyKernel3-nio-${ZIP_SUFFIX}-${GITHUB_RUN_NUMBER}.zip"
+
+          test -s "${BUILT_IMAGE}"
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "${ANYKERNEL_DIR}"
+
+          cp "${BUILT_IMAGE}" "${ANYKERNEL_DIR}/Image"
+          cat > "${ANYKERNEL_DIR}/anykernel.sh" <<EOF
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+
+          properties() { '
+          kernel.string=${KERNEL_STRING}
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=nio
+          device.name2=nio_retcn
+          device.name3=nio_retail
+          device.name4=nio_retus
+          device.name5=nio_reteu
+          device.name6=nio_global
+          device.name7=nio_amz
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+
+          BLOCK=boot;
+          IS_SLOT_DEVICE=1;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+
+          . tools/ak3-core.sh;
+
+          split_boot;
+          flash_boot;
+          EOF
+
+          rm -rf "${ANYKERNEL_DIR}/.git" "${ANYKERNEL_DIR}/.github"
+          rm -f "${ANYKERNEL_DIR}/README.md" "${ANYKERNEL_DIR}/LICENSE"
+          find "${ANYKERNEL_DIR}" -type f -name placeholder -delete
+
+          cd "${ANYKERNEL_DIR}"
+          zip -r9 "${ARTIFACT_DIR}/${ZIP_NAME}" .
+          test -s "${ARTIFACT_DIR}/${ZIP_NAME}"
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnyKernel3-nio-lineage-23.2${{ inputs.enable_ksunext && '-ksunext' || '' }}-${{ github.run_number }}
+          path: |
+            artifact/AnyKernel3-nio-lineage-23.2-*.zip
+            artifact/build-info.txt
+          if-no-files-found: error
