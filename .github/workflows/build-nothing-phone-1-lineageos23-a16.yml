@@ -133,8 +133,11 @@ jobs:
           fi
 
           if [ -n "${KSU_REPO_DIR}" ]; then
-            git -C "${KSU_REPO_DIR}" fetch --depth=1 origin "${{ inputs.ksunext_branch }}"
-            git -C "${KSU_REPO_DIR}" checkout --detach FETCH_HEAD
+            if git -C "${KSU_REPO_DIR}" fetch --depth=1 origin "${{ inputs.ksunext_branch }}"; then
+              git -C "${KSU_REPO_DIR}" checkout --detach FETCH_HEAD
+            else
+              echo "KernelSU Next ref '${{ inputs.ksunext_branch }}' was not found in the cloned repository; using setup.sh checkout."
+            fi
           fi
 
           if [ -d KernelSU-Next ]; then
