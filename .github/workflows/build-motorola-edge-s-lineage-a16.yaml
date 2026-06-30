@@ -119,7 +119,49 @@ jobs:
 
           cd "${GITHUB_WORKSPACE}"
           python3 - <<'PY'
+          import re
           from pathlib import Path
+
+          def replace_regex(text, pattern, replacement, ready, label):
+              if ready in text:
+                  return text
+              text, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE)
+              if count != 1:
+                  raise SystemExit(f"Could not patch {label}")
+              return text
+
+          dtc_checks = Path("device_kernel/scripts/dtc/checks.c")
+          text = dtc_checks.read_text(encoding="utf-8")
+          text = replace_regex(
+              text,
+              r"static void check_is_null_terminated\(struct check \*c,\s*struct node \*root,\s*struct node \*node\)",
+              "static void check_is_null_terminated(struct check *c, struct dt_info *dti,\n"
+              "\t\t\t    struct node *node)",
+              "static void check_is_null_terminated(struct check *c, struct dt_info *dti",
+              "dtc null-terminated check signature",
+          )
+          text = replace_regex(
+              text,
+              r"FAIL\(c,\s*\"\\\"%s\\\" property in %s is not null terminated\",\s*propname,\s*node->fullpath\);",
+              "FAIL(c, dti, node, \"\\\"%s\\\" property in %s is not null terminated\",\n"
+              "\t\t     propname, node->fullpath);",
+              "FAIL(c, dti, node, \"\\\"%s\\\" property in %s is not null terminated\"",
+              "dtc null-terminated FAIL arguments",
+          )
+          text = replace_regex(
+              text,
+              r"""#define WARNING_IF_NOT_NULL_TERMINATED\(nm, propname\)\s*\\\s*
+\s*WARNING\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)\s*
+#define ERROR_IF_NOT_NULL_TERMINATED\(nm, propname\)\s*\\\s*
+\s*ERROR\(nm,\s*NULL,\s*check_is_null_terminated,\s*NULL,\s*\(propname\)\)""",
+              """#define WARNING_IF_NOT_NULL_TERMINATED(nm, propname) \\
+\tWARNING(nm, check_is_null_terminated, (propname))
+#define ERROR_IF_NOT_NULL_TERMINATED(nm, propname) \\
+\tERROR(nm, check_is_null_terminated, (propname))""",
+              "WARNING(nm, check_is_null_terminated, (propname))",
+              "dtc null-terminated warning/error macros",
+          )
+          dtc_checks.write_text(text, encoding="utf-8")
 
           pack_process = Path(".github/workflows/pack-process/action.yml")
           lines = pack_process.read_text(encoding="utf-8").splitlines()
