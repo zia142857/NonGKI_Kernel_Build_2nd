@@ -15,8 +15,8 @@ env:
   KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH : "lineage-23.2"
 
-  CLANG_SOURCE : "https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz"
-  CLANG_BRANCH : ""
+  CLANG_SOURCE : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
+  CLANG_BRANCH : "android16-release"
 
   GCC_GNU : false
   GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
@@ -131,13 +131,45 @@ jobs:
           grep -q 'WARNING_IF_NOT_STRING(status_is_string, "status");' scripts/dtc/checks.c
           ! grep -q 'status_is_null_terminated' scripts/dtc/checks.c
 
-          # Kernel Flasher may not expose enough recovery-style metadata for
-          # AnyKernel3's BLOCK=auto detection. nio is an A/B device, so point
-          # AK3 at boot and let it append the active slot suffix.
-          sed -i 's!^BLOCK=.*!BLOCK=/dev/block/bootdevice/by-name/boot;!' Anykernel3/anykernel.sh
-          sed -i 's!^IS_SLOT_DEVICE=.*!IS_SLOT_DEVICE=1;!' Anykernel3/anykernel.sh
+          # Minimal boot-only AnyKernel3 script for nio. Keep the existing
+          # boot ramdisk byte-for-byte and replace only the raw kernel Image.
+          cat > Anykernel3/anykernel.sh <<'AK3EOF'
+          ### AnyKernel3 Ramdisk Mod Script
+
+          properties() { '
+          kernel.string=Motorola Edge S nio LineageOS 23.2 boot-only KernelSU
+          do.devicecheck=0
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=nio
+          device.name2=
+          device.name3=
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+
+          boot_attributes() { :; }
+
+          BLOCK=/dev/block/bootdevice/by-name/boot;
+          IS_SLOT_DEVICE=1;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+          NO_MAGISK_CHECK=1;
+
+          . tools/ak3-core.sh;
+
+          split_boot;
+          flash_boot;
+          AK3EOF
+          sed -i 's/^          //' Anykernel3/anykernel.sh
           grep -q '^BLOCK=/dev/block/bootdevice/by-name/boot;' Anykernel3/anykernel.sh
           grep -q '^IS_SLOT_DEVICE=1;' Anykernel3/anykernel.sh
+          grep -q '^NO_MAGISK_CHECK=1;' Anykernel3/anykernel.sh
 
       - name: Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
