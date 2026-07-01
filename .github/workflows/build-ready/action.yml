@@ -94,6 +94,7 @@ runs:
           bash clean_hook.sh
 
       - name: Set KernelSU
+        if: env.KERNELSU_ENABLE != 'false'
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
@@ -295,6 +296,7 @@ runs:
           fi
 
       - name: Set KSU and SUSFS for DEFCONFIG
+        if: env.KERNELSU_ENABLE != 'false'
         shell: bash
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
