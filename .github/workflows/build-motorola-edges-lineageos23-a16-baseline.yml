@@ -57,7 +57,7 @@ env:
   PACK_METHOD: "Anykernel3"
   PACK_KMODULES: "false"
 
-  KERNELSU_METHOD: "none"
+  KERNELSU_METHOD: "manual"
 
   PATCHES_SOURCE: ""
   PATCHES_BRANCH: ""
@@ -68,7 +68,7 @@ env:
   REKERNEL_ENABLE: "false"
   DROIDSPACES_ENABLE: "false"
 
-  HOOK_METHOD: "manual"
+  HOOK_METHOD: "syscall"
 
   KERNEL_PATCH: "false"
 
