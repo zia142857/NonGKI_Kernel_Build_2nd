@@ -12,7 +12,7 @@ env:
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "LD=ld.lld LLVM=1 LLVM_IAS=1"
 
-  KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_SOURCE : "https://github.com/zia142857/android_kernel_moto_sm8250.git"
   KERNEL_BRANCH : "lineage-23.2"
 
   CLANG_SOURCE : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
@@ -32,8 +32,8 @@ env:
   KERNELSU_SOURCE : ""
   KERNELSU_BRANCH : ""
 
-  KERNELSU_ENABLE : "false"
-  KERNELSU_AUTO_GET : "false"
+  KERNELSU_ENABLE : "true"
+  KERNELSU_AUTO_GET : "true"
   KERNELSU_AUTO_FORK : "xxksu" # xxksu, rsuntk, next, resukisu and sukisu
 
   SUSFS_ENABLE : false
@@ -68,7 +68,7 @@ env:
   REKERNEL_ENABLE: "false"
   DROIDSPACES_ENABLE: "false"
 
-  HOOK_METHOD: "syscall"
+  HOOK_METHOD: "manual"
 
   KERNEL_PATCH: "false"
 
