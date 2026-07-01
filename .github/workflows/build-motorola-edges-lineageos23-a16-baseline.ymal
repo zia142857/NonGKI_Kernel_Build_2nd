@@ -1,0 +1,205 @@
+name: Build Motorola Edge S Baseline (LineageOS 23.2 A16)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  # Device env
+  DEVICE_NAME : "motorola_edges"
+  DEVICE_CODENAME : "nio"
+
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
+  EXTRA_CMDS : "LD=ld.lld LLVM=1 LLVM_IAS=1"
+
+  KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH : "lineage-23.2"
+
+  CLANG_SOURCE : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
+  CLANG_BRANCH : "android16-release"
+
+  GCC_GNU : false
+  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "android12L-release"
+  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "android12L-release"
+
+  DEFCONFIG_SOURCE: ""
+  DEFCONFIG_NAME : "vendor/kona-perf_defconfig"
+  DEFCONFIG_ORIGIN_IMAGE: ""
+  DEFCONFIG_FROM_BOOT: false
+
+  KERNELSU_SOURCE : ""
+  KERNELSU_BRANCH : ""
+
+  KERNELSU_ENABLE : "false"
+  KERNELSU_AUTO_GET : "false"
+  KERNELSU_AUTO_FORK : "xxksu" # xxksu, rsuntk, next, resukisu and sukisu
+
+  SUSFS_ENABLE : false
+  SUSFS_FIXED : false
+
+  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH : "master"
+
+  BOOT_SOURCE : ""
+
+  NEED_DTBO : false
+  NEED_SAFE_DTBO : false
+  HAVE_NO_DTBO : "false"
+  HAVE_NO_DTBO_TOOL : "false"
+
+  ROM_TEXT : "lineageos23_2_a16_baseline"
+
+  # Other env
+  PYTHON_VERSION: "3"
+
+  PACK_METHOD: "Anykernel3"
+  PACK_KMODULES: "false"
+
+  KERNELSU_METHOD: "none"
+
+  PATCHES_SOURCE: ""
+  PATCHES_BRANCH: ""
+
+  SUSFS_FOLDER_FIXED: ""
+  SUSFS_PATCH_FIXED: ""
+
+  REKERNEL_ENABLE: "false"
+  DROIDSPACES_ENABLE: "false"
+
+  HOOK_METHOD: "syscall"
+
+  KERNEL_PATCH: "false"
+
+  KPM_ENABLE: "false"
+  KPM_INLINE: "false"
+  KPM_KPATCH_NEXT: "false"
+  KPM_PATCH_SOURCE: "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/refs/heads/main/kpm/patch_linux"
+
+  BASEBAND_GUARD_ENABLE: "false"
+  BASEBAND_GUARD_BOOT: "false"
+
+  GENERATE_DTB: "false"
+  GENERATE_CHIP: "qcom"
+
+  BUILD_DEBUGGER: "false"
+  SKIP_PATCH: "false"
+
+  BUILD_OTHER_CONFIG: "true"
+  MERGE_CONFIG_FILES: "vendor/ext_config/moto-kona.config,vendor/ext_config/nio-default.config"
+
+  FREE_MORE_SPACE: "false"
+
+jobs:
+  build-kernel:
+    name: Motorola Edge S Baseline (LineageOS 23.2 A16)
+    runs-on: ubuntu-22.04
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Compilation environment preparation
+        uses: ./.github/workflows/build-env
+
+      - name: Get necessary tools
+        uses: ./.github/workflows/build-ready
+
+      - name: Patch Kernel of SUSFS
+        uses: ./.github/workflows/patch-susfs
+
+      - name: Patch for no-kprobe
+        if: env.KERNELSU_ENABLE != 'false'
+        uses: ./.github/workflows/patch-no-kprobe
+
+      - name: Extra Kernel Options
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          # nio uses vendor/kona-perf_defconfig plus Motorola/common and device ext_config files.
+          # BUILD_OTHER_CONFIG merges those ext_config files during the build step.
+
+          # lineage-23.2 currently carries a broken local DTC null-terminated
+          # status check. It builds with warnings, then the generated dtc can
+          # segfault while compiling qcom dtbs, so restore the normal v4.19
+          # string check before the host dtc is built.
+          perl -0pi -e 's/\nstatic void check_is_null_terminated\(struct check \*c, struct node \*root,\n\s+struct node \*node\)\n\{.*?\n\}\n#define WARNING_IF_NOT_NULL_TERMINATED\(nm, propname\) \\\n\s+WARNING\(nm, NULL, check_is_null_terminated, NULL, \(propname\)\)\n#define ERROR_IF_NOT_NULL_TERMINATED\(nm, propname\) \\\n\s+ERROR\(nm, NULL, check_is_null_terminated, NULL, \(propname\)\)\n//s' scripts/dtc/checks.c
+          sed -i 's/WARNING_IF_NOT_NULL_TERMINATED(status_is_null_terminated, "status");/WARNING_IF_NOT_STRING(status_is_string, "status");/' scripts/dtc/checks.c
+          sed -i 's/&status_is_null_terminated/\&status_is_string/g' scripts/dtc/checks.c
+          grep -q 'WARNING_IF_NOT_STRING(status_is_string, "status");' scripts/dtc/checks.c
+          ! grep -q 'status_is_null_terminated' scripts/dtc/checks.c
+
+          # Minimal boot-only AnyKernel3 script for nio. Keep the existing
+          # boot ramdisk byte-for-byte and replace only the raw kernel Image.
+          cat > Anykernel3/anykernel.sh <<'AK3EOF'
+          ### AnyKernel3 Ramdisk Mod Script
+
+          properties() { '
+          kernel.string=Motorola Edge S nio LineageOS 23.2 boot-only baseline
+          do.devicecheck=0
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          do.cleanuponabort=0
+          device.name1=nio
+          device.name2=
+          device.name3=
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; }
+
+          boot_attributes() { :; }
+
+          BLOCK=/dev/block/bootdevice/by-name/boot;
+          IS_SLOT_DEVICE=1;
+          RAMDISK_COMPRESSION=auto;
+          PATCH_VBMETA_FLAG=auto;
+          NO_MAGISK_CHECK=1;
+
+          . tools/ak3-core.sh;
+
+          split_boot;
+          flash_boot;
+          AK3EOF
+          sed -i 's/^          //' Anykernel3/anykernel.sh
+          grep -q '^BLOCK=/dev/block/bootdevice/by-name/boot;' Anykernel3/anykernel.sh
+          grep -q '^IS_SLOT_DEVICE=1;' Anykernel3/anykernel.sh
+          grep -q '^NO_MAGISK_CHECK=1;' Anykernel3/anykernel.sh
+
+      - name: Patch Kernel of Re:Kernel
+        uses: ./.github/workflows/patch-rekernel
+
+      - name: Patch Kernel of Droidspaces
+        uses: ./.github/workflows/patch-droidspaces
+
+      - name: Patch Kernel of Baseband Guard
+        uses: ./.github/workflows/patch-baseband-guard
+
+      - name: Build Process
+        uses: ./.github/workflows/build-process
+
+      - name: Keep AnyKernel3 boot-only for nio
+        shell: bash
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          IMAGE_DIR="$GITHUB_WORKSPACE/device_kernel/out/arch/${{ env.KERNEL_ARCH }}/boot"
+
+          # nio stores dtb in vendor_boot, and dtbo is a separate partition.
+          # Leave both partitions untouched; only replace the boot kernel Image.
+          rm -f "$IMAGE_DIR/dtb" "$IMAGE_DIR/dtb.img" "$IMAGE_DIR/dtbo.img"
+          rm -f "$IMAGE_DIR/Image.gz-dtb" "$IMAGE_DIR/Image.gz"
+          test -f "$IMAGE_DIR/Image"
+          echo "Packed boot-only kernel Image for nio."
+
+      - name: Pack Process
+        uses: ./.github/workflows/pack-process
+
+      - name: Upload Artifacts
+        uses: ./.github/workflows/upload-files
