@@ -43,10 +43,10 @@ env:
 
   BOOT_SOURCE : ""
 
-  NEED_DTBO : true
+  NEED_DTBO : false
   NEED_SAFE_DTBO : false
-  HAVE_NO_DTBO : "true"
-  HAVE_NO_DTBO_TOOL : "true"
+  HAVE_NO_DTBO : "false"
+  HAVE_NO_DTBO_TOOL : "false"
 
   ROM_TEXT : "lineageos23_2_a16"
 
@@ -79,7 +79,7 @@ env:
   BASEBAND_GUARD_ENABLE: "false"
   BASEBAND_GUARD_BOOT: "false"
 
-  GENERATE_DTB: "true"
+  GENERATE_DTB: "false"
   GENERATE_CHIP: "qcom"
 
   BUILD_DEBUGGER: "false"
@@ -150,6 +150,19 @@ jobs:
 
       - name: Build Process
         uses: ./.github/workflows/build-process
+
+      - name: Keep AnyKernel3 boot-only for nio
+        shell: bash
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          IMAGE_DIR="$GITHUB_WORKSPACE/device_kernel/out/arch/${{ env.KERNEL_ARCH }}/boot"
+
+          # nio stores dtb in vendor_boot, and dtbo is a separate partition.
+          # Leave both partitions untouched; only replace the boot kernel Image.
+          rm -f "$IMAGE_DIR/dtb" "$IMAGE_DIR/dtb.img" "$IMAGE_DIR/dtbo.img"
+          rm -f "$IMAGE_DIR/Image.gz-dtb" "$IMAGE_DIR/Image.gz"
+          test -f "$IMAGE_DIR/Image"
+          echo "Packed boot-only kernel Image for nio."
 
       - name: Pack Process
         uses: ./.github/workflows/pack-process
