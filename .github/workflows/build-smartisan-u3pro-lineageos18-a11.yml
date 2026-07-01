@@ -1,61 +1,65 @@
-name: Build moto edge s (Lineage OS 23.2 A16)
+name: Build Motorola Edge S (LineageOS 23.2 A16)
 
 on:
   workflow_call:
   workflow_dispatch:
 
 env:
-  DEVICE_NAME: "moto_edge_s"
-  DEVICE_CODENAME: "nio"
+  # Device env
+  DEVICE_NAME : "motorola_edges"
+  DEVICE_CODENAME : "nio"
 
-  CUSTOM_CMDS: "LLVM=1 LLVM_IAS=1 CLANG_TRIPLE=aarch64-linux-gnu-  CROSS_COMPILE=aarch64-linux-gnu- "
-  EXTRA_CMDS: "DTC_EXT=/usr/bin/dtc DTC=/usr/bin/dtc"
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
+  EXTRA_CMDS : "LD=ld.lld LLVM=1 LLVM_IAS=1"
 
-  KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
-  KERNEL_BRANCH: "lineage-23.2"
+  KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH : "lineage-23.2"
 
-  CLANG_SOURCE: "https://github.com/bachnxuan/aosp_clang_mirror/releases/download/clang-r574158-14475230/clang-r574158.tar.gz"
-  CLANG_BRANCH: ""
+  CLANG_SOURCE : "https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz"
+  CLANG_BRANCH : ""
 
-  GCC_GNU: false
-  GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH: "android12L-release"
-  GCC_32_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH: "android12L-release"
+  GCC_GNU : false
+  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "android12L-release"
+  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "android12L-release"
 
   DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME: "vendor/kona-perf_defconfig"
+  DEFCONFIG_NAME : "vendor/kona-perf_defconfig"
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
-  KERNELSU_SOURCE: ""
-  KERNELSU_BRANCH: ""
+  KERNELSU_SOURCE : ""
+  KERNELSU_BRANCH : ""
 
-  KERNELSU_AUTO_GET: "true"
-  KERNELSU_AUTO_FORK: "xxksu"
+  KERNELSU_AUTO_GET : "true"
+  KERNELSU_AUTO_FORK : "xxksu" # xxksu, rsuntk, next, resukisu and sukisu
 
-  SUSFS_ENABLE: false
-  SUSFS_FIXED: false
+  SUSFS_ENABLE : false
+  SUSFS_FIXED : false
 
-  AK3_SOURCE: "https://github.com/osm0sis/AnyKernel3.git"
-  AK3_BRANCH: "master"
+  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH : "master"
 
-  BOOT_SOURCE: "https://mirrors.ocf.berkeley.edu/lineageos/full/nio/20260615/boot.img"
+  BOOT_SOURCE : ""
 
-  NEED_DTBO: false
-  NEED_SAFE_DTBO: false
+  NEED_DTBO : true
+  NEED_SAFE_DTBO : false
+  HAVE_NO_DTBO : "true"
+  HAVE_NO_DTBO_TOOL : "true"
 
-  ROM_TEXT: "moto_lineage_a16"
+  ROM_TEXT : "lineageos23_2_a16"
 
+  # Other env
   PYTHON_VERSION: "3"
 
-  PACK_METHOD: "MKBOOTIMG"
+  PACK_METHOD: "Anykernel3"
   PACK_KMODULES: "false"
 
   KERNELSU_METHOD: "shell"
 
-  PATCHES_SOURCE: "author/source"
-  PATCHES_BRANCH: "branch"
+  PATCHES_SOURCE: ""
+  PATCHES_BRANCH: ""
 
   SUSFS_FOLDER_FIXED: ""
   SUSFS_PATCH_FIXED: ""
@@ -75,10 +79,10 @@ env:
   BASEBAND_GUARD_ENABLE: "false"
   BASEBAND_GUARD_BOOT: "false"
 
-  GENERATE_DTB: "false"
+  GENERATE_DTB: "true"
   GENERATE_CHIP: "qcom"
 
-  BUILD_DEBUGGER: "true"
+  BUILD_DEBUGGER: "false"
   SKIP_PATCH: "false"
 
   BUILD_OTHER_CONFIG: "true"
@@ -88,54 +92,50 @@ env:
 
 jobs:
   build-kernel:
-    name: moto edge s (Lineage OS 23.2 A16)
-    runs-on: ubuntu-latest
+    name: Motorola Edge S (LineageOS 23.2 A16)
+    runs-on: ubuntu-22.04
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
 
     steps:
-      - name: ⏰ Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: ⌛️ Compilation environment preparation
+      - name: Compilation environment preparation
         uses: ./.github/workflows/build-env
 
-      - name: ⚙️ Get necessary tools
+      - name: Get necessary tools
         uses: ./.github/workflows/build-ready
 
-      - name: 🪝 Patch Kernel of SUSFS
+      - name: Patch Kernel of SUSFS
         uses: ./.github/workflows/patch-susfs
 
-      - name: 🔗 Patch for no-kprobe
+      - name: Patch for no-kprobe
         uses: ./.github/workflows/patch-no-kprobe
 
-      - name: 🪛 Extra Kernel Options
+      - name: Extra Kernel Options
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
-          sudo apt-get install -y device-tree-compiler
-          echo "CONFIG_MODULE_SIG_FORCE=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "# CONFIG_MODULE_SIG_ALL is not set" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_PSTORE=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_PSTORE_RAM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_PSTORE_CONSOLE=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_PSTORE_PMSG=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          # nio uses vendor/kona-perf_defconfig plus Motorola/common and device ext_config files.
+          # BUILD_OTHER_CONFIG merges those ext_config files during the build step.
+          # Nothing else is required here for the initial xxksu syscall-hook build.
 
-      - name: 🧰 Patch Kernel of Re:Kernel
+      - name: Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
 
-      - name: 💿 Patch Kernel of Droidspaces
+      - name: Patch Kernel of Droidspaces
         uses: ./.github/workflows/patch-droidspaces
 
-      - name: 🔒 Patch Kernel of Baseband Guard
+      - name: Patch Kernel of Baseband Guard
         uses: ./.github/workflows/patch-baseband-guard
 
-      - name: 🚀 Build Process
+      - name: Build Process
         uses: ./.github/workflows/build-process
 
-      - name: 🔩 Pack Process
+      - name: Pack Process
         uses: ./.github/workflows/pack-process
 
-      - name: ✏️ Upload Artifacts
+      - name: Upload Artifacts
         uses: ./.github/workflows/upload-files
