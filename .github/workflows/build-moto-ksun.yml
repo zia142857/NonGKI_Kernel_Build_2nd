@@ -26,7 +26,15 @@ on:
       ksu_ref:
         description: KernelSU Next ref for non-GKI kernels
         required: true
-        default: legacy
+        default: v1.1.1
+      hook_mode:
+        description: KernelSU Next hook mode
+        required: true
+        type: choice
+        default: kprobe
+        options:
+          - kprobe
+          - manual
 
 permissions:
   contents: read
@@ -116,6 +124,7 @@ jobs:
           git -C KernelSU-Next rev-parse --short HEAD
 
       - name: Apply KernelSU Next manual syscall hooks
+        if: inputs.hook_mode == 'manual'
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           set -euo pipefail
@@ -228,10 +237,21 @@ jobs:
           cat > "${OUT_DIR}/ksunext.config" <<'EOF'
           CONFIG_OVERLAY_FS=y
           CONFIG_KSU=y
-          CONFIG_KSU_MANUAL_HOOK=y
           CONFIG_KPROBES=y
+          CONFIG_KRETPROBES=y
+          CONFIG_HAVE_SYSCALL_TRACEPOINTS=y
+          CONFIG_KSU_KPROBES_HOOK=y
+          # CONFIG_KSU_MANUAL_HOOK is not set
           EOF
           sed -i 's/^          //' "${OUT_DIR}/ksunext.config"
+
+          if [ "${{ inputs.hook_mode }}" = "manual" ]; then
+            cat >> "${OUT_DIR}/ksunext.config" <<'EOF'
+          CONFIG_KSU_MANUAL_HOOK=y
+          # CONFIG_KSU_KPROBES_HOOK is not set
+          EOF
+            sed -i 's/^          //' "${OUT_DIR}/ksunext.config"
+          fi
 
           FRAGMENT_PATHS=()
           for fragment in ${CONFIG_FRAGMENTS}; do
@@ -258,8 +278,10 @@ jobs:
           grep -q "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" "${OUT_DIR}/.config"
           grep -q "CONFIG_OVERLAY_FS=y" "${OUT_DIR}/.config"
           grep -q "CONFIG_KSU=y" "${OUT_DIR}/.config"
-          grep -q "CONFIG_KSU_MANUAL_HOOK=y" "${OUT_DIR}/.config"
           grep -q "CONFIG_KPROBES=y" "${OUT_DIR}/.config"
+          if [ "${{ inputs.hook_mode }}" = "manual" ]; then
+            grep -q "CONFIG_KSU_MANUAL_HOOK=y" "${OUT_DIR}/.config"
+          fi
 
       - name: Build kernel Image
         working-directory: ${{ env.KERNEL_DIR }}
@@ -342,7 +364,7 @@ jobs:
             "${CLANG_PREBUILT}/bin/clang" --version | head -n1
             echo
             echo "Enabled config:"
-            grep -E "CONFIG_OVERLAY_FS=|CONFIG_KSU=|CONFIG_KSU_MANUAL_HOOK=|CONFIG_KPROBES=|CONFIG_HAVE_KPROBES=|CONFIG_KPROBE_EVENTS=" "${OUT_DIR}/.config" || true
+            grep -E "CONFIG_OVERLAY_FS=|CONFIG_KSU=|CONFIG_KSU_MANUAL_HOOK=|CONFIG_KSU_KPROBES_HOOK=|CONFIG_KPROBES=|CONFIG_KRETPROBES=|CONFIG_HAVE_KPROBES=|CONFIG_HAVE_SYSCALL_TRACEPOINTS=|CONFIG_KPROBE_EVENTS=" "${OUT_DIR}/.config" || true
             echo
             echo "Image:"
             ls -lh "${BUILT_IMAGE}"
