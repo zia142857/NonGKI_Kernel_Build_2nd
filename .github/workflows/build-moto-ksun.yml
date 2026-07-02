@@ -40,6 +40,14 @@ on:
         options:
           - kprobe
           - manual
+      ksu_runtime:
+        description: KernelSU Next runtime mode
+        required: true
+        type: choice
+        default: normal
+        options:
+          - normal
+          - disable_init
 
 permissions:
   contents: read
@@ -128,6 +136,49 @@ jobs:
 
           test -f drivers/kernelsu/Kconfig
           git -C KernelSU-Next rev-parse --short HEAD
+
+      - name: Disable KernelSU Next init for boot debug
+        if: inputs.enable_ksu && inputs.ksu_runtime == 'disable_init'
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path("KernelSU-Next/kernel")
+          patterns = (
+              re.compile(r'^(\s*)((?:early_|core_|postcore_|arch_|subsys_|fs_|rootfs_|device_|late_)?initcall)\s*\(\s*([A-Za-z0-9_]*ksu[A-Za-z0-9_]*init[A-Za-z0-9_]*)\s*\)\s*;'),
+              re.compile(r'^(\s*)(module_init)\s*\(\s*([A-Za-z0-9_]*ksu[A-Za-z0-9_]*init[A-Za-z0-9_]*)\s*\)\s*;'),
+          )
+          changed = []
+          for path in root.rglob("*.c"):
+              lines = path.read_text().splitlines()
+              out = []
+              touched = False
+              for line in lines:
+                  replacement = None
+                  for pattern in patterns:
+                      match = pattern.match(line)
+                      if match:
+                          replacement = f"{match.group(1)}/* boot-debug disabled: {line.strip()} */"
+                          break
+                  if replacement:
+                      out.append(replacement)
+                      touched = True
+                  else:
+                      out.append(line)
+              if touched:
+                  path.write_text("\n".join(out) + "\n")
+                  changed.append(str(path))
+
+          if not changed:
+              raise SystemExit("No KernelSU initcall lines were disabled")
+
+          print("Disabled KernelSU initcall(s):")
+          for item in changed:
+              print(item)
+          PY
 
       - name: Apply KernelSU Next manual syscall hooks
         if: inputs.enable_ksu && inputs.hook_mode == 'manual'
@@ -327,8 +378,13 @@ jobs:
           ARTIFACT_DIR="${GITHUB_WORKSPACE}/artifact"
           BUILT_IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
           if [ "${{ inputs.enable_ksu }}" = "true" ]; then
-            ZIP_NAME="AnyKernel3-nio-lineage-23.2-ksunext-${GITHUB_RUN_NUMBER}.zip"
-            KERNEL_LABEL="KernelSU Next"
+            if [ "${{ inputs.ksu_runtime }}" = "disable_init" ]; then
+              ZIP_NAME="AnyKernel3-nio-lineage-23.2-ksunext-disable-init-${GITHUB_RUN_NUMBER}.zip"
+              KERNEL_LABEL="KernelSU Next disable-init"
+            else
+              ZIP_NAME="AnyKernel3-nio-lineage-23.2-ksunext-${GITHUB_RUN_NUMBER}.zip"
+              KERNEL_LABEL="KernelSU Next"
+            fi
           else
             ZIP_NAME="AnyKernel3-nio-lineage-23.2-no-ksu-${GITHUB_RUN_NUMBER}.zip"
             KERNEL_LABEL="no KernelSU"
@@ -409,6 +465,7 @@ jobs:
           name: AnyKernel3-nio-lineage-23.2-${{ github.run_number }}
           path: |
             artifact/AnyKernel3-nio-lineage-23.2-ksunext-*.zip
+            artifact/AnyKernel3-nio-lineage-23.2-ksunext-disable-init-*.zip
             artifact/AnyKernel3-nio-lineage-23.2-no-ksu-*.zip
             artifact/build-info.txt
           if-no-files-found: error
