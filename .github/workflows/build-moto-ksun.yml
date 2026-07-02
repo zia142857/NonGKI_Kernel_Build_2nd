@@ -27,6 +27,11 @@ on:
         description: KernelSU Next ref for non-GKI kernels
         required: true
         default: v1.1.1
+      enable_ksu:
+        description: Enable KernelSU Next
+        required: true
+        type: boolean
+        default: true
       hook_mode:
         description: KernelSU Next hook mode
         required: true
@@ -108,6 +113,7 @@ jobs:
           "${PREFERRED_CLANG}/bin/clang" --version
 
       - name: Integrate KernelSU Next
+        if: inputs.enable_ksu
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           set -euo pipefail
@@ -124,13 +130,14 @@ jobs:
           git -C KernelSU-Next rev-parse --short HEAD
 
       - name: Apply KernelSU Next manual syscall hooks
-        if: inputs.hook_mode == 'manual'
+        if: inputs.enable_ksu && inputs.hook_mode == 'manual'
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           set -euo pipefail
           bash "${GITHUB_WORKSPACE}/Patches/syscall_hook_patches.sh" ./
 
       - name: Backport KernelSU Next path_umount before build
+        if: inputs.enable_ksu && inputs.hook_mode == 'manual'
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           set -euo pipefail
@@ -236,6 +243,11 @@ jobs:
 
           cat > "${OUT_DIR}/ksunext.config" <<'EOF'
           CONFIG_OVERLAY_FS=y
+          EOF
+          sed -i 's/^          //' "${OUT_DIR}/ksunext.config"
+
+          if [ "${{ inputs.enable_ksu }}" = "true" ]; then
+            cat >> "${OUT_DIR}/ksunext.config" <<'EOF'
           CONFIG_KSU=y
           CONFIG_KPROBES=y
           CONFIG_KRETPROBES=y
@@ -243,9 +255,10 @@ jobs:
           CONFIG_KSU_KPROBES_HOOK=y
           # CONFIG_KSU_MANUAL_HOOK is not set
           EOF
-          sed -i 's/^          //' "${OUT_DIR}/ksunext.config"
+            sed -i 's/^          //' "${OUT_DIR}/ksunext.config"
+          fi
 
-          if [ "${{ inputs.hook_mode }}" = "manual" ]; then
+          if [ "${{ inputs.enable_ksu }}" = "true" ] && [ "${{ inputs.hook_mode }}" = "manual" ]; then
             cat >> "${OUT_DIR}/ksunext.config" <<'EOF'
           CONFIG_KSU_MANUAL_HOOK=y
           # CONFIG_KSU_KPROBES_HOOK is not set
@@ -277,9 +290,11 @@ jobs:
 
           grep -q "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" "${OUT_DIR}/.config"
           grep -q "CONFIG_OVERLAY_FS=y" "${OUT_DIR}/.config"
-          grep -q "CONFIG_KSU=y" "${OUT_DIR}/.config"
-          grep -q "CONFIG_KPROBES=y" "${OUT_DIR}/.config"
-          if [ "${{ inputs.hook_mode }}" = "manual" ]; then
+          if [ "${{ inputs.enable_ksu }}" = "true" ]; then
+            grep -q "CONFIG_KSU=y" "${OUT_DIR}/.config"
+            grep -q "CONFIG_KPROBES=y" "${OUT_DIR}/.config"
+          fi
+          if [ "${{ inputs.enable_ksu }}" = "true" ] && [ "${{ inputs.hook_mode }}" = "manual" ]; then
             grep -q "CONFIG_KSU_MANUAL_HOOK=y" "${OUT_DIR}/.config"
           fi
 
@@ -311,19 +326,25 @@ jobs:
 
           ARTIFACT_DIR="${GITHUB_WORKSPACE}/artifact"
           BUILT_IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
-          ZIP_NAME="AnyKernel3-nio-lineage-23.2-ksunext-${GITHUB_RUN_NUMBER}.zip"
+          if [ "${{ inputs.enable_ksu }}" = "true" ]; then
+            ZIP_NAME="AnyKernel3-nio-lineage-23.2-ksunext-${GITHUB_RUN_NUMBER}.zip"
+            KERNEL_LABEL="KernelSU Next"
+          else
+            ZIP_NAME="AnyKernel3-nio-lineage-23.2-no-ksu-${GITHUB_RUN_NUMBER}.zip"
+            KERNEL_LABEL="no KernelSU"
+          fi
           mkdir -p "${ARTIFACT_DIR}"
 
           test -s "${BUILT_IMAGE}"
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "${ANYKERNEL_DIR}"
           cp "${BUILT_IMAGE}" "${ANYKERNEL_DIR}/Image"
 
-          cat > "${ANYKERNEL_DIR}/anykernel.sh" <<'EOF'
+          cat > "${ANYKERNEL_DIR}/anykernel.sh" <<EOF
           ### AnyKernel3 Ramdisk Mod Script
           ## osm0sis @ xda-developers
 
           properties() { '
-          kernel.string=LineageOS 23.2 nio KernelSU Next kernel
+          kernel.string=LineageOS 23.2 nio ${KERNEL_LABEL} kernel
           do.devicecheck=1
           do.modules=0
           do.systemless=1
@@ -356,9 +377,13 @@ jobs:
             echo "Kernel source:"
             git -C "${KERNEL_DIR}" log -1 --oneline
             echo
-            echo "KernelSU Next source:"
-            git -C "${KERNEL_DIR}/KernelSU-Next" describe --tags --always --dirty
-            git -C "${KERNEL_DIR}/KernelSU-Next" log -1 --oneline
+            if [ "${{ inputs.enable_ksu }}" = "true" ]; then
+              echo "KernelSU Next source:"
+              git -C "${KERNEL_DIR}/KernelSU-Next" describe --tags --always --dirty
+              git -C "${KERNEL_DIR}/KernelSU-Next" log -1 --oneline
+            else
+              echo "KernelSU Next source: disabled"
+            fi
             echo
             echo "Clang:"
             "${CLANG_PREBUILT}/bin/clang" --version | head -n1
@@ -381,8 +406,9 @@ jobs:
       - name: Upload AnyKernel3 zip
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3-nio-lineage-23.2-ksunext-${{ github.run_number }}
+          name: AnyKernel3-nio-lineage-23.2-${{ github.run_number }}
           path: |
             artifact/AnyKernel3-nio-lineage-23.2-ksunext-*.zip
+            artifact/AnyKernel3-nio-lineage-23.2-no-ksu-*.zip
             artifact/build-info.txt
           if-no-files-found: error
