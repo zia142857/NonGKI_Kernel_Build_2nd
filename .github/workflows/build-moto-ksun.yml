@@ -121,6 +121,86 @@ jobs:
           set -euo pipefail
           bash "${GITHUB_WORKSPACE}/Patches/syscall_hook_patches.sh" ./
 
+      - name: Backport KernelSU Next path_umount before build
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+
+          if ! grep -Eq '^static int can_umount' fs/namespace.c; then
+            python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("fs/namespace.c")
+          text = path.read_text()
+          anchor = "static bool is_mnt_ns_file"
+          if anchor not in text:
+              raise SystemExit("cannot find namespace.c insertion anchor")
+
+          can_umount = r'''
+          static int can_umount(const struct path *path, int flags)
+          {
+          	struct mount *mnt = real_mount(path->mnt);
+
+          	if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))
+          		return -EINVAL;
+          	if (!may_mount())
+          		return -EPERM;
+          	if (path->dentry != path->mnt->mnt_root)
+          		return -EINVAL;
+          	if (!check_mnt(mnt))
+          		return -EINVAL;
+          	if (mnt->mnt.mnt_flags & MNT_LOCKED)
+          		return -EINVAL;
+          	if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))
+          		return -EPERM;
+          	return 0;
+          }
+
+          '''
+          text = text.replace(anchor, can_umount + anchor, 1)
+          path.write_text(text)
+          PY
+          fi
+
+          if ! grep -Eq '^int path_umount' fs/namespace.c; then
+            python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("fs/namespace.c")
+          text = path.read_text()
+          anchor = "static bool is_mnt_ns_file"
+          if anchor not in text:
+              raise SystemExit("cannot find namespace.c insertion anchor")
+
+          path_umount = r'''
+          int path_umount(struct path *path, int flags)
+          {
+          	struct mount *mnt = real_mount(path->mnt);
+          	int ret;
+
+          	ret = can_umount(path, flags);
+          	if (!ret)
+          		ret = do_umount(mnt, flags);
+          	dput(path->dentry);
+          	mntput_no_expire(mnt);
+          	return ret;
+          }
+
+          '''
+          text = text.replace(anchor, path_umount + anchor, 1)
+          path.write_text(text)
+          PY
+          fi
+
+          grep -q '^int path_umount' fs/namespace.c
+          grep -q '^static int can_umount' fs/namespace.c
+
+          if ! grep -Eq '^int path_umount\(struct path \*path, int flags\);' fs/internal.h; then
+            sed -i '/^extern void __init mnt_init/a int path_umount(struct path *path, int flags);' fs/internal.h
+            grep -Eq '^int path_umount\(struct path \*path, int flags\);' fs/internal.h || \
+              printf '\nint path_umount(struct path *path, int flags);\n' >> fs/internal.h
+          fi
+
       - name: Configure kernel
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
