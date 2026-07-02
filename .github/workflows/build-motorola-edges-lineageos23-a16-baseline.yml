@@ -12,17 +12,17 @@ env:
   CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
   EXTRA_CMDS : "LD=ld.lld LLVM=1 LLVM_IAS=1"
 
-  KERNEL_SOURCE : "https://github.com/zia142857/android_kernel_moto_sm8250.git"
+  KERNEL_SOURCE : "https://github.com/lineage/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH : "lineage-23.2"
 
   CLANG_SOURCE : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
   CLANG_BRANCH : "android16-release"
 
   GCC_GNU : false
-  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
-  GCC_64_BRANCH : "android12L-release"
-  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
-  GCC_32_BRANCH : "android12L-release"
+  GCC_64_SOURCE : ""
+  GCC_64_BRANCH : ""
+  GCC_32_SOURCE : ""
+  GCC_32_BRANCH : ""
 
   DEFCONFIG_SOURCE: ""
   DEFCONFIG_NAME : "vendor/kona-perf_defconfig"
@@ -57,7 +57,7 @@ env:
   PACK_METHOD: "Anykernel3"
   PACK_KMODULES: "false"
 
-  KERNELSU_METHOD: "manual"
+  KERNELSU_METHOD: "shell"
 
   PATCHES_SOURCE: ""
   PATCHES_BRANCH: ""
