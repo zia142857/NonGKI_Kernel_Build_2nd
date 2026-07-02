@@ -1,253 +1,286 @@
-name: Build Motorola Edge S KSU Next (LineageOS 23.2 A16)
+name: Build Motorola Edge S KernelSU Next kernel
 
 on:
   workflow_dispatch:
-  workflow_call:
+    inputs:
+      kernel_repo:
+        description: Kernel repository
+        required: true
+        default: LineageOS/android_kernel_motorola_sm8250
+      kernel_branch:
+        description: Kernel branch
+        required: true
+        default: lineage-23.2
+      clang_branch:
+        description: Android clang branch
+        required: true
+        default: android16-release
+      clang_version:
+        description: Android clang directory to use
+        required: true
+        default: clang-r547379
+      ksu_repo:
+        description: KernelSU Next repository
+        required: true
+        default: KernelSU-Next/KernelSU-Next
+      ksu_ref:
+        description: KernelSU Next ref for non-GKI kernels
+        required: true
+        default: legacy
 
-env:
-  DEVICE_NAME: motorola_edges
-  DEVICE_CODENAME: nio
-  ROM_TEXT: lineageos23_2_a16_ksunext
+permissions:
+  contents: read
 
-  KERNEL_SOURCE: https://github.com/LineageOS/android_kernel_motorola_sm8250.git
-  KERNEL_BRANCH: lineage-23.2
-  DEVICE_COMMON_SOURCE: https://github.com/LineageOS/android_device_motorola_sm8250-common.git
-  DEVICE_NIO_SOURCE: https://github.com/LineageOS/android_device_motorola_nio.git
-  DEVICE_BRANCH: lineage-23.2
-
-  DEFCONFIG: vendor/kona-perf_defconfig
-  MERGE_CONFIGS: vendor/ext_config/moto-kona.config vendor/ext_config/nio-default.config vendor/ext_config/nio-ksunext.config
-
-  CLANG_SOURCE: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86
-  CLANG_BRANCH: android16-release
-  GCC64_SOURCE: https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git
-  GCC64_BRANCH: android12L-release
-  GCC32_SOURCE: https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git
-  GCC32_BRANCH: android12L-release
-
-  KSU_NEXT_BRANCH: legacy
+concurrency:
+  group: nio-ksunext-kernel-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-ksunext:
-    name: Build nio KSU Next kernel
-    runs-on: ubuntu-22.04
+  build:
+    name: Build KernelSU Next AnyKernel3 zip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      KERNEL_DIR: ${{ github.workspace }}/kernel/motorola/sm8250
+      OUT_DIR: ${{ github.workspace }}/out
+      CLANG_DIR: ${{ github.workspace }}/toolchains/clang
+      CLANG_VERSION: ${{ inputs.clang_version }}
+      ANYKERNEL_DIR: ${{ github.workspace }}/AnyKernel3
+      DEFCONFIG: vendor/kona-perf_defconfig
+      CONFIG_FRAGMENTS: vendor/ext_config/moto-kona.config vendor/ext_config/nio-default.config
 
     steps:
       - name: Checkout build project
         uses: actions/checkout@v4
 
-      - name: Free disk space
-        shell: bash
-        run: |
-          sudo rm -rf /opt/hostedtoolcache /usr/local/lib/android /usr/share/dotnet
-          df -h
-
-      - name: Install build dependencies
-        shell: bash
+      - name: Prepare packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            bc bison build-essential ccache cpio curl flex git kmod libelf-dev \
-            libssl-dev lz4 lzop python3 unzip wget xz-utils zip zstd
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            bison \
+            build-essential \
+            ca-certificates \
+            flex \
+            git \
+            libelf-dev \
+            libssl-dev \
+            python3 \
+            zip
 
-      - name: Clone LineageOS sources
-        shell: bash
+      - name: Clone kernel source
         run: |
-          git clone --depth=1 -b "$KERNEL_BRANCH" "$KERNEL_SOURCE" device_kernel
-          git clone --depth=1 -b "$DEVICE_BRANCH" "$DEVICE_COMMON_SOURCE" device_common
-          git clone --depth=1 -b "$DEVICE_BRANCH" "$DEVICE_NIO_SOURCE" device_nio
+          git clone --depth=1 \
+            --branch "${{ inputs.kernel_branch }}" \
+            "https://github.com/${{ inputs.kernel_repo }}.git" \
+            "${KERNEL_DIR}"
 
-          test -f device_kernel/arch/arm64/configs/$DEFCONFIG
-          test -f device_kernel/arch/arm64/configs/vendor/ext_config/moto-kona.config
-          test -f device_kernel/arch/arm64/configs/vendor/ext_config/nio-default.config
-
-      - name: Install Android toolchains
-        shell: bash
+      - name: Clone Android clang
         run: |
-          git clone --depth=1 -b "$CLANG_BRANCH" "$CLANG_SOURCE" clang-prebuilt
-          git clone --depth=1 -b "$GCC64_BRANCH" "$GCC64_SOURCE" gcc-64
-          git clone --depth=1 -b "$GCC32_BRANCH" "$GCC32_SOURCE" gcc-32
+          git clone --depth=1 --filter=blob:none --no-checkout \
+            --branch "${{ inputs.clang_branch }}" \
+            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
+            "${CLANG_DIR}"
+          git -C "${CLANG_DIR}" sparse-checkout init --cone
+          git -C "${CLANG_DIR}" sparse-checkout set "${CLANG_VERSION}"
+          git -C "${CLANG_DIR}" checkout
 
-          CLANG_DIR="$(find "$GITHUB_WORKSPACE/clang-prebuilt" -maxdepth 1 -type d -name 'clang-r*' | sort | tail -n 1)"
-          test -n "$CLANG_DIR"
-          echo "CLANG_DIR=$CLANG_DIR" >> "$GITHUB_ENV"
-          echo "$CLANG_DIR/bin" >> "$GITHUB_PATH"
-          echo "$GITHUB_WORKSPACE/gcc-64/bin" >> "$GITHUB_PATH"
-          echo "$GITHUB_WORKSPACE/gcc-32/bin" >> "$GITHUB_PATH"
-
-      - name: Add KernelSU Next and manual syscall hooks
-        shell: bash
+      - name: Select clang
         run: |
-          cd "$GITHUB_WORKSPACE/device_kernel"
-
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/$KSU_NEXT_BRANCH/kernel/setup.sh" | bash -s "$KSU_NEXT_BRANCH"
-          test -d drivers/kernelsu
-
-          bash "$GITHUB_WORKSPACE/Patches/syscall_hook_patches.sh" ./
-
-      - name: Add nio KSU Next config fragment
-        shell: bash
-        run: |
-          cd "$GITHUB_WORKSPACE/device_kernel"
-          cat > arch/arm64/configs/vendor/ext_config/nio-ksunext.config <<'EOF'
-          CONFIG_KSU=y
-          CONFIG_KSU_MANUAL_HOOK=y
-          CONFIG_KALLSYMS=y
-          CONFIG_KALLSYMS_ALL=y
-          CONFIG_LOCALVERSION="-perf"
-          # CONFIG_LOCALVERSION_AUTO is not set
-          # CONFIG_CC_WERROR is not set
-          EOF
-          sed -i 's/^          //' arch/arm64/configs/vendor/ext_config/nio-ksunext.config
-
-      - name: Fix LineageOS 23.2 local DTC status check
-        shell: bash
-        run: |
-          cd "$GITHUB_WORKSPACE/device_kernel"
-
-          if grep -q 'status_is_null_terminated' scripts/dtc/checks.c; then
-            perl -0pi -e 's/\nstatic void check_is_null_terminated\(struct check \*c, struct node \*root,\n\s+struct node \*node\)\n\{.*?\n\}\n#define WARNING_IF_NOT_NULL_TERMINATED\(nm, propname\) \\\n\s+WARNING\(nm, NULL, check_is_null_terminated, NULL, \(propname\)\)\n#define ERROR_IF_NOT_NULL_TERMINATED\(nm, propname\) \\\n\s+ERROR\(nm, NULL, check_is_null_terminated, NULL, \(propname\)\)\n//s' scripts/dtc/checks.c
-            sed -i 's/WARNING_IF_NOT_NULL_TERMINATED(status_is_null_terminated, "status");/WARNING_IF_NOT_STRING(status_is_string, "status");/' scripts/dtc/checks.c
-            sed -i 's/&status_is_null_terminated/\&status_is_string/g' scripts/dtc/checks.c
+          set -euo pipefail
+          PREFERRED_CLANG="${CLANG_DIR}/${CLANG_VERSION}"
+          if [ ! -x "${PREFERRED_CLANG}/bin/clang" ]; then
+            echo "No usable Android clang found at ${PREFERRED_CLANG}" >&2
+            exit 1
           fi
+          echo "CLANG_PREBUILT=${PREFERRED_CLANG}" >> "${GITHUB_ENV}"
+          "${PREFERRED_CLANG}/bin/clang" --version
 
-          ! grep -q 'status_is_null_terminated' scripts/dtc/checks.c
-
-      - name: Build kernel
-        shell: bash
+      - name: Integrate KernelSU Next
+        working-directory: ${{ env.KERNEL_DIR }}
         run: |
-          cd "$GITHUB_WORKSPACE/device_kernel"
+          set -euo pipefail
+          git clone "https://github.com/${{ inputs.ksu_repo }}.git" KernelSU-Next
+          git -C KernelSU-Next checkout "${{ inputs.ksu_ref }}"
 
-          export PATH="$CLANG_DIR/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
-          export KBUILD_BUILD_USER=LineageOS
-          export KBUILD_BUILD_HOST=GithubActions
+          ln -sfn ../KernelSU-Next/kernel drivers/kernelsu
+          grep -q 'obj-$(CONFIG_KSU) += kernelsu/' drivers/Makefile || \
+            printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
+          grep -q 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig || \
+            sed -i '/endmenu/i\source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
-          MAKE_ARGS=(
-            O=out
-            ARCH=arm64
-            CC="ccache clang"
-            CLANG_TRIPLE=aarch64-linux-gnu-
-            CROSS_COMPILE=aarch64-linux-android-
-            CROSS_COMPILE_ARM32=arm-linux-androideabi-
-            LD=ld.lld
-            LLVM=1
-            LLVM_IAS=1
-          )
+          test -f drivers/kernelsu/Kconfig
+          git -C KernelSU-Next rev-parse --short HEAD
 
-          make "${MAKE_ARGS[@]}" "$DEFCONFIG"
+      - name: Apply KernelSU Next manual syscall hooks
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          bash "${GITHUB_WORKSPACE}/Patches/syscall_hook_patches.sh" ./
 
-          IFS=' ' read -r -a CONFIGS <<< "$MERGE_CONFIGS"
-          for config in "${CONFIGS[@]}"; do
-            ./scripts/kconfig/merge_config.sh -O out -m out/.config "arch/arm64/configs/$config"
+      - name: Configure kernel
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          set -euo pipefail
+          export PATH="${CLANG_PREBUILT}/bin:${PATH}"
+
+          test -f "arch/arm64/configs/${DEFCONFIG}"
+          for fragment in ${CONFIG_FRAGMENTS}; do
+            test -f "arch/arm64/configs/${fragment}"
           done
 
-          make "${MAKE_ARGS[@]}" olddefconfig
-          grep -E 'CONFIG_LOCALVERSION=|CONFIG_LOCALVERSION_AUTO|CONFIG_KSU=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KALLSYMS' out/.config || true
+          make O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            "${DEFCONFIG}"
 
-          make -j"$(nproc)" "${MAKE_ARGS[@]}" 2>&1 | tee build.log
+          cat > "${OUT_DIR}/ksunext.config" <<'EOF'
+          CONFIG_OVERLAY_FS=y
+          CONFIG_KSU=y
+          CONFIG_KSU_MANUAL_HOOK=y
+          CONFIG_KPROBES=y
+          EOF
+          sed -i 's/^          //' "${OUT_DIR}/ksunext.config"
 
-      - name: Package AnyKernel3 boot flasher
-        shell: bash
+          FRAGMENT_PATHS=()
+          for fragment in ${CONFIG_FRAGMENTS}; do
+            FRAGMENT_PATHS+=("arch/arm64/configs/${fragment}")
+          done
+          ./scripts/kconfig/merge_config.sh -m -O "${OUT_DIR}" \
+            "${OUT_DIR}/.config" \
+            "${FRAGMENT_PATHS[@]}" \
+            "${OUT_DIR}/ksunext.config"
+
+          make O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            olddefconfig
+
+          grep -q "CONFIG_BUILD_ARM64_UNCOMPRESSED_KERNEL=y" "${OUT_DIR}/.config"
+          grep -q "CONFIG_OVERLAY_FS=y" "${OUT_DIR}/.config"
+          grep -q "CONFIG_KSU=y" "${OUT_DIR}/.config"
+          grep -q "CONFIG_KSU_MANUAL_HOOK=y" "${OUT_DIR}/.config"
+          grep -q "CONFIG_KPROBES=y" "${OUT_DIR}/.config"
+
+      - name: Build kernel Image
+        working-directory: ${{ env.KERNEL_DIR }}
+        env:
+          KBUILD_BUILD_USER: lineage
+          KBUILD_BUILD_HOST: github-actions
         run: |
-          cd "$GITHUB_WORKSPACE"
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel3
+          set -euo pipefail
+          export PATH="${CLANG_PREBUILT}/bin:${PATH}"
 
-          IMAGE_DIR="$GITHUB_WORKSPACE/device_kernel/out/arch/arm64/boot"
-          test -f "$IMAGE_DIR/Image"
+          make -j"$(nproc)" O="${OUT_DIR}" \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            Image
 
-          cat > anykernel3/anykernel.sh <<'EOF'
+      - name: Package AnyKernel3 flashable zip
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/artifact"
+          BUILT_IMAGE="${OUT_DIR}/arch/arm64/boot/Image"
+          ZIP_NAME="AnyKernel3-nio-lineage-23.2-ksunext-${GITHUB_RUN_NUMBER}.zip"
+          mkdir -p "${ARTIFACT_DIR}"
+
+          test -s "${BUILT_IMAGE}"
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git "${ANYKERNEL_DIR}"
+          cp "${BUILT_IMAGE}" "${ANYKERNEL_DIR}/Image"
+
+          cat > "${ANYKERNEL_DIR}/anykernel.sh" <<'EOF'
           ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
 
           properties() { '
-          kernel.string=Motorola Edge S nio LineageOS 23.2 KSU Next
-          do.devicecheck=0
+          kernel.string=LineageOS 23.2 nio KernelSU Next kernel
+          do.devicecheck=1
           do.modules=0
           do.systemless=1
           do.cleanup=1
           do.cleanuponabort=0
           device.name1=nio
+          device.name2=nio_retcn
+          device.name3=nio_retail
+          device.name4=nio_retus
+          device.name5=nio_reteu
+          device.name6=nio_global
+          device.name7=nio_amz
           supported.versions=
           supported.patchlevels=
           supported.vendorpatchlevels=
           '; }
 
-          boot_attributes() { :; }
-
-          BLOCK=/dev/block/bootdevice/by-name/boot;
-          block=/dev/block/bootdevice/by-name/boot;
+          BLOCK=boot;
           IS_SLOT_DEVICE=1;
-          is_slot_device=1;
           RAMDISK_COMPRESSION=auto;
-          ramdisk_compression=auto;
           PATCH_VBMETA_FLAG=auto;
-          patch_vbmeta_flag=auto;
-          NO_MAGISK_CHECK=1;
 
           . tools/ak3-core.sh;
 
           split_boot;
           flash_boot;
-
-          reset_ak;
-          BLOCK=vendor_boot;
-          block=vendor_boot;
-          IS_SLOT_DEVICE=1;
-          is_slot_device=1;
-          RAMDISK_COMPRESSION=auto;
-          ramdisk_compression=auto;
-          PATCH_VBMETA_FLAG=auto;
-          patch_vbmeta_flag=auto;
-
-          dump_boot;
-          mkdir -p "$ramdisk/lib/modules";
-          for module in "$home"/modules/lib/modules/*.ko; do
-            [ -f "$module" ] && cp -af "$module" "$ramdisk/lib/modules/";
-          done;
-          write_boot;
           EOF
-          sed -i 's/^          //' anykernel3/anykernel.sh
 
-          mkdir -p artifacts/raw
-          cp "$IMAGE_DIR/Image" anykernel3/Image
-          cp "$IMAGE_DIR/Image" artifacts/raw/Image
-          cp device_kernel/out/.config artifacts/raw/kernel.config
-          cp device_kernel/build.log artifacts/raw/build.log
-          cp device_kernel/Module.symvers artifacts/raw/Module.symvers || true
-
-          find "$IMAGE_DIR/dts" -type f \( -name '*nio*.dtb' -o -name '*nio*.dtbo' \) -print -exec cp {} artifacts/raw/ \; || true
-
-          mkdir -p anykernel3/modules/lib/modules
           {
-            for list in device_common/modules.load device_common/modules.load.recovery device_nio/modules.load device_nio/modules.load.recovery; do
-              [ -f "$list" ] && cat "$list"
-            done
-            echo nova_0flash_mmi.ko
-          } | sed 's/#.*$//' | sed '/^[[:space:]]*$/d' | sort -u > artifacts/raw/vendor_boot_modules.expected
+            echo "Kernel source:"
+            git -C "${KERNEL_DIR}" log -1 --oneline
+            echo
+            echo "KernelSU Next source:"
+            git -C "${KERNEL_DIR}/KernelSU-Next" describe --tags --always --dirty
+            git -C "${KERNEL_DIR}/KernelSU-Next" log -1 --oneline
+            echo
+            echo "Clang:"
+            "${CLANG_PREBUILT}/bin/clang" --version | head -n1
+            echo
+            echo "Enabled config:"
+            grep -E "CONFIG_OVERLAY_FS=|CONFIG_KSU=|CONFIG_KSU_MANUAL_HOOK=|CONFIG_KPROBES=|CONFIG_HAVE_KPROBES=|CONFIG_KPROBE_EVENTS=" "${OUT_DIR}/.config" || true
+            echo
+            echo "Image:"
+            ls -lh "${BUILT_IMAGE}"
+          } | tee "${ARTIFACT_DIR}/build-info.txt"
 
-          while read -r module; do
-            found="$(find device_kernel/out -type f -name "$module" | head -n 1)"
-            if [ -n "$found" ]; then
-              cp -f "$found" anykernel3/modules/lib/modules/
-            else
-              echo "missing: $module" | tee -a artifacts/raw/vendor_boot_modules.missing
-            fi
-          done < artifacts/raw/vendor_boot_modules.expected
+          rm -rf "${ANYKERNEL_DIR}/.git" "${ANYKERNEL_DIR}/.github"
+          rm -f "${ANYKERNEL_DIR}/README.md" "${ANYKERNEL_DIR}/LICENSE"
+          find "${ANYKERNEL_DIR}" -type f -name placeholder -delete
 
-          find anykernel3/modules/lib/modules -type f -name '*.ko' -exec "$CLANG_DIR/bin/llvm-strip" --strip-unneeded {} \; || true
-          find anykernel3/modules/lib/modules -type f -printf '%f %s bytes\n' | sort > artifacts/raw/vendor_boot_modules.packed
+          cd "${ANYKERNEL_DIR}"
+          zip -r9 "${ARTIFACT_DIR}/${ZIP_NAME}" .
+          test -s "${ARTIFACT_DIR}/${ZIP_NAME}"
 
-          TIME="$(date +%Y%m%d%H%M%S)"
-          PACK_NAME="${DEVICE_CODENAME}-${ROM_TEXT}-${TIME}-boot-vendor_boot-AnyKernel3.zip"
-          (
-            cd anykernel3
-            zip -r9 "$GITHUB_WORKSPACE/$PACK_NAME" ./*
-          )
-          echo "PACK_NAME=$PACK_NAME" >> "$GITHUB_ENV"
-
-      - name: Upload artifacts
+      - name: Upload AnyKernel3 zip
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-nio-lineageos23_2_a16-ksunext
+          name: AnyKernel3-nio-lineage-23.2-ksunext-${{ github.run_number }}
           path: |
-            *.zip
-            artifacts/raw/**
+            artifact/AnyKernel3-nio-lineage-23.2-ksunext-*.zip
+            artifact/build-info.txt
+          if-no-files-found: error
