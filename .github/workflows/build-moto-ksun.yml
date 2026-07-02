@@ -174,15 +174,36 @@ jobs:
           boot_attributes() { :; }
 
           BLOCK=/dev/block/bootdevice/by-name/boot;
+          block=/dev/block/bootdevice/by-name/boot;
           IS_SLOT_DEVICE=1;
+          is_slot_device=1;
           RAMDISK_COMPRESSION=auto;
+          ramdisk_compression=auto;
           PATCH_VBMETA_FLAG=auto;
+          patch_vbmeta_flag=auto;
           NO_MAGISK_CHECK=1;
 
           . tools/ak3-core.sh;
 
           split_boot;
           flash_boot;
+
+          reset_ak;
+          BLOCK=vendor_boot;
+          block=vendor_boot;
+          IS_SLOT_DEVICE=1;
+          is_slot_device=1;
+          RAMDISK_COMPRESSION=auto;
+          ramdisk_compression=auto;
+          PATCH_VBMETA_FLAG=auto;
+          patch_vbmeta_flag=auto;
+
+          dump_boot;
+          mkdir -p "$ramdisk/lib/modules";
+          for module in "$home"/modules/lib/modules/*.ko; do
+            [ -f "$module" ] && cp -af "$module" "$ramdisk/lib/modules/";
+          done;
+          write_boot;
           EOF
           sed -i 's/^          //' anykernel3/anykernel.sh
 
@@ -195,8 +216,28 @@ jobs:
 
           find "$IMAGE_DIR/dts" -type f \( -name '*nio*.dtb' -o -name '*nio*.dtbo' \) -print -exec cp {} artifacts/raw/ \; || true
 
+          mkdir -p anykernel3/modules/lib/modules
+          {
+            for list in device_common/modules.load device_common/modules.load.recovery device_nio/modules.load device_nio/modules.load.recovery; do
+              [ -f "$list" ] && cat "$list"
+            done
+            echo nova_0flash_mmi.ko
+          } | sed 's/#.*$//' | sed '/^[[:space:]]*$/d' | sort -u > artifacts/raw/vendor_boot_modules.expected
+
+          while read -r module; do
+            found="$(find device_kernel/out -type f -name "$module" | head -n 1)"
+            if [ -n "$found" ]; then
+              cp -f "$found" anykernel3/modules/lib/modules/
+            else
+              echo "missing: $module" | tee -a artifacts/raw/vendor_boot_modules.missing
+            fi
+          done < artifacts/raw/vendor_boot_modules.expected
+
+          find anykernel3/modules/lib/modules -type f -name '*.ko' -exec "$CLANG_DIR/bin/llvm-strip" --strip-unneeded {} \; || true
+          find anykernel3/modules/lib/modules -type f -printf '%f %s bytes\n' | sort > artifacts/raw/vendor_boot_modules.packed
+
           TIME="$(date +%Y%m%d%H%M%S)"
-          PACK_NAME="${DEVICE_CODENAME}-${ROM_TEXT}-${TIME}-AnyKernel3.zip"
+          PACK_NAME="${DEVICE_CODENAME}-${ROM_TEXT}-${TIME}-boot-vendor_boot-AnyKernel3.zip"
           (
             cd anykernel3
             zip -r9 "$GITHUB_WORKSPACE/$PACK_NAME" ./*
