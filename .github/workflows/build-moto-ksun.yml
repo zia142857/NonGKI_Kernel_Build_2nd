@@ -146,28 +146,6 @@ jobs:
 
           make -j"$(nproc)" "${MAKE_ARGS[@]}" 2>&1 | tee build.log
 
-      - name: Install built modules for artifact
-        if: always()
-        shell: bash
-        run: |
-          cd "$GITHUB_WORKSPACE/device_kernel"
-
-          export PATH="$CLANG_DIR/bin:$GITHUB_WORKSPACE/gcc-64/bin:$GITHUB_WORKSPACE/gcc-32/bin:$PATH"
-          MAKE_ARGS=(
-            O=out
-            ARCH=arm64
-            CC="ccache clang"
-            CLANG_TRIPLE=aarch64-linux-gnu-
-            CROSS_COMPILE=aarch64-linux-android-
-            CROSS_COMPILE_ARM32=arm-linux-androideabi-
-            LD=ld.lld
-            LLVM=1
-            LLVM_IAS=1
-          )
-
-          mkdir -p "$GITHUB_WORKSPACE/artifacts/modules"
-          make "${MAKE_ARGS[@]}" INSTALL_MOD_PATH="$GITHUB_WORKSPACE/artifacts/modules" INSTALL_MOD_STRIP=1 modules_install || true
-
       - name: Package AnyKernel3 boot flasher
         shell: bash
         run: |
@@ -232,4 +210,3 @@ jobs:
           path: |
             *.zip
             artifacts/raw/**
-            artifacts/modules/**
