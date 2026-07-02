@@ -148,20 +148,22 @@ jobs:
 
           root = Path("KernelSU-Next/kernel")
           patterns = (
-              re.compile(r'^(\s*)((?:early_|core_|postcore_|arch_|subsys_|fs_|rootfs_|device_|late_)?initcall)\s*\(\s*([A-Za-z0-9_]*ksu[A-Za-z0-9_]*init[A-Za-z0-9_]*)\s*\)\s*;'),
-              re.compile(r'^(\s*)(module_init)\s*\(\s*([A-Za-z0-9_]*ksu[A-Za-z0-9_]*init[A-Za-z0-9_]*)\s*\)\s*;'),
+              re.compile(r'^(\s*)((?:early_|core_|postcore_|arch_|subsys_|fs_|rootfs_|device_|late_)?initcall(?:_sync)?)\s*\(\s*([A-Za-z0-9_]+)\s*\)\s*;'),
+              re.compile(r'^(\s*)(module_init)\s*\(\s*([A-Za-z0-9_]+)\s*\)\s*;'),
           )
           changed = []
+          disabled = []
           for path in root.rglob("*.c"):
               lines = path.read_text().splitlines()
               out = []
               touched = False
-              for line in lines:
+              for lineno, line in enumerate(lines, 1):
                   replacement = None
                   for pattern in patterns:
                       match = pattern.match(line)
                       if match:
                           replacement = f"{match.group(1)}/* boot-debug disabled: {line.strip()} */"
+                          disabled.append(f"{path}:{lineno}: {line.strip()}")
                           break
                   if replacement:
                       out.append(replacement)
@@ -173,10 +175,13 @@ jobs:
                   changed.append(str(path))
 
           if not changed:
+              print("Scanned files:")
+              for path in root.rglob("*.c"):
+                  print(path)
               raise SystemExit("No KernelSU initcall lines were disabled")
 
           print("Disabled KernelSU initcall(s):")
-          for item in changed:
+          for item in disabled:
               print(item)
           PY
 
