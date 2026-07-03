@@ -15,8 +15,8 @@ env:
   KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
   KERNEL_BRANCH : "lineage-23.2"
 
-  CLANG_SOURCE : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86"
-  CLANG_BRANCH : "android16-release"
+  CLANG_SOURCE : "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r563880c.tar.gz"
+  CLANG_BRANCH : ""
 
   GCC_GNU : false
   GCC_64_SOURCE : ""
@@ -32,7 +32,7 @@ env:
   KERNELSU_SOURCE : ""
   KERNELSU_BRANCH : ""
 
-  KERNELSU_ENABLE : "true"
+  KERNELSU_ENABLE : "false"
   KERNELSU_AUTO_GET : "true"
   KERNELSU_AUTO_FORK : "resukisu" # xxksu, rsuntk, next, resukisu and sukisu
 
