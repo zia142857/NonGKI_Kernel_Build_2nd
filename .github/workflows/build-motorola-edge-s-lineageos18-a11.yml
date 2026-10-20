@@ -39,9 +39,10 @@ env:
   KERNELSU_AUTO_GET : "true" # if u want easy setting kernelsu, u can true.
   KERNELSU_AUTO_FORK : "bakasu" # xxksu, rsuntk , next, bakasu and sukisu
 
-  # kona 的 defconfig 里 KPROBES 是默认 y，但本项目只提供 syscall / SUSFS inline 两条路；
-  # moto 的 CAF 树对 4.19 通用 SUSFS 补丁兼容性没保证，默认走 manual hook。
-  SUSFS_ENABLE : false
+  # 开 SUSFS 后 patch-no-kprobe 会**强制**改走 susfs_inline_hook_patches.sh，
+  # HOOK_METHOD 的值在这个模式下被忽略（保留 syscall 只是保持与其它设备一致）。
+  # 仓库里的 susfs_patch_to_4.19.patch 实际是 v2.3.0，正好满足 inline hook 的 2.3.00+ 要求。
+  SUSFS_ENABLE : true
   SUSFS_FIXED : false
 
   AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
