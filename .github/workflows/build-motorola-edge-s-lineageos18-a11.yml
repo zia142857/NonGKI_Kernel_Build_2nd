@@ -113,6 +113,52 @@ jobs:
       - name: ⚙️ Get necessary tools
         uses: ./.github/workflows/build-ready
 
+      - name: 🧩 Normalise fs/notify/fdinfo.c for SUSFS
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          python3 - <<'PY'
+          import re, sys
+
+          p = 'fs/notify/fdinfo.c'
+          s = open(p, encoding='utf-8').read()
+
+          # 1) 补丁只调用 inotify_mark_user_mask() 却从没定义过（4.14/4.19/5.4 三个
+          #    补丁都缺），这里按 4.19 原生语义补上：mark->mask & IN_ALL_EVENTS。
+          helper = (
+              '#ifdef CONFIG_KSU_SUSFS\n'
+              'static inline unsigned int inotify_mark_user_mask(struct fsnotify_mark *mark)\n'
+              '{\n'
+              '\treturn mark->mask & IN_ALL_EVENTS;\n'
+              '}\n'
+              '#endif\n'
+              '\n'
+          )
+          if 'inotify_mark_user_mask(struct fsnotify_mark *mark)' not in s:
+              anchor = '#ifdef CONFIG_INOTIFY_USER\n'
+              if anchor not in s:
+                  sys.exit('[-] anchor "#ifdef CONFIG_INOTIFY_USER" not found')
+              s = s.replace(anchor, helper + anchor, 1)
+
+          # 2) 把 inotify_fdinfo() 里 4.19 老写法的 seq_printf 规范化成补丁期望的形式，
+          #    否则 hunk @@ -83,6 +106,60 @@ 的尾随上下文对不上，会落 .rej。
+          i = s.index('inotify_fdinfo(struct seq_file')
+          j = s.index('inotify_show_fdinfo')
+          seg = s[i:j]
+
+          seg = re.sub(r'\t\t/\*.*?\*/\n', '', seg, count=1, flags=re.S)
+          seg = re.sub(r'\t\tu32 mask = mark->mask & IN_ALL_EVENTS;\n', '', seg, count=1)
+          seg = seg.replace('ignored_mask:%x "', 'ignored_mask:0 "', 1)
+          seg = seg.replace('mask, mark->ignored_mask);', 'inotify_mark_user_mask(mark));', 1)
+
+          if 'ignored_mask:0 ' not in seg or 'inotify_mark_user_mask(mark)' not in seg:
+              sys.exit('[-] inotify_fdinfo body did not normalise, aborting')
+
+          s = s[:i] + seg + s[j:]
+          open(p, 'w', encoding='utf-8', newline='\n').write(s)
+          print('[+] fdinfo.c normalised for SUSFS patch')
+          PY
+          grep -n "inotify_mark_user_mask\|ignored_mask:0" fs/notify/fdinfo.c
+
       - name: 🪝 Patch Kernel of SUSFS
         uses: ./.github/workflows/patch-susfs
 
