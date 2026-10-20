@@ -134,11 +134,29 @@ jobs:
           sed -i -e 's/^CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/' "$DEFCONFIG"
           grep -q '^# CONFIG_MODULE_SIG_FORCE is not set' "$DEFCONFIG" || echo '# CONFIG_MODULE_SIG_FORCE is not set' >> "$DEFCONFIG"
 
-          # 3) 关掉 -Werror（defconfig 里 CONFIG_CC_WERROR=y -> KBUILD_CFLAGS += -Werror）。
-          #    KernelSU / syscall hook 补丁会引入新代码，Clang 12 上任何一个新警告都会
-          #    直接变成编译错误，这里必须让警告只当警告。
-          sed -i -e 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' "$DEFCONFIG"
-          grep -q '^# CONFIG_CC_WERROR is not set' "$DEFCONFIG" || echo '# CONFIG_CC_WERROR is not set' >> "$DEFCONFIG"
+          # 3) -Werror：上一次构建失败的唯一原因就是它。
+          #    元凶不是 CONFIG_CC_WERROR（这棵树的 defconfig 里压根没有这个符号），
+          #    而是 Makefile 顶部那行无条件的：
+          #        KBUILD_CFLAGS := -Wall -Wundef -Werror=strict-prototypes ...
+          #    clang 会把它渲染成 [-Werror,-Wstrict-prototypes]，
+          #    于是 techpack/camera/.../cam_sensor_core.c:681 的
+          #    `int cam_pmic_workaround() {` 老式函数定义直接中断整个构建。
+          #    做法：把所有 -Werror=xxx 降级为 -Wno-error=xxx（警告照常打印，
+          #    只是不再当错误），再摘掉全局 -Werror，最后在 Makefile 末尾兜底。
+          sed -i 's/-Werror=/-Wno-error=/g' Makefile
+          sed -i 's/^\(KBUILD_CFLAGS[[:space:]]*+=[[:space:]]*\)-Werror$/\1# -Werror disabled by NonGKI/' Makefile
+          [ -z "$(tail -c 1 Makefile)" ] || echo >> Makefile
+          grep -q '^KBUILD_CFLAGS += -Wno-error$' Makefile || printf 'KBUILD_CFLAGS += -Wno-error\n' >> Makefile
+
+          # 双保险：把日志里那一处老式函数定义补成 (void) 原型
+          CAM_SENSOR_CORE=techpack/camera/drivers/cam_sensor_module/cam_sensor/cam_sensor_core.c
+          if [ -f "$CAM_SENSOR_CORE" ]; then
+            sed -i 's/int cam_pmic_workaround() {/int cam_pmic_workaround(void) {/' "$CAM_SENSOR_CORE"
+            grep -n 'cam_pmic_workaround' "$CAM_SENSOR_CORE" | head -n 3
+          fi
+
+          echo "[+] -Werror downgraded:"
+          grep -n -- 'Wno-error\|Werror disabled' Makefile | head -n 8
 
           # 4) 去掉 DEBUG_INFO：4.19 + LTO 全量调试信息产物 10G+，对运行没有任何影响
           sed -i -e 's/^CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/' "$DEFCONFIG"
