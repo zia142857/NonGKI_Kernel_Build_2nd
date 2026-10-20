@@ -97,18 +97,21 @@ runs:
                     echo "[+] =================================== "
                 done
 
-            fi
+                # 只有真的存在 .rej 时才需要判断是否放行。
+                # 原逻辑把这段放在 if/else 之外，导致「0 个 rej + 未提供 fixed patch」
+                # 也会命中 elif 里的 `-z SUSFS_PATCH_FIXED` 而被误判为失败。
+                if [[ "${{ env.SKIP_PATCH }}" == "true" ]] || [ -n "${{ env.SUSFS_PATCH_FIXED }}" ]; then
+                    echo "[+] SUSFS Patch Version: v${SUSFS_VERSION}. "
+                    echo "[+] SKIP_PATCH enabled or found SUSFS v2.2.00 Fixed Patch, skipping."
+                    PACK_FILES
 
-            if [[ "${{ env.SKIP_PATCH }}" == "true" ]] || [ -n "${{ env.SUSFS_PATCH_FIXED }}" ]; then
-                echo "[+] SUSFS Patch Version: v${SUSFS_VERSION}. "
-                echo "[+] SKIP_PATCH enabled or found SUSFS v2.2.00 Fixed Patch, skipping."
-                PACK_FILES
+                else
+                    echo "[+] SUSFS Patch Version: v${SUSFS_VERSION}. "
+                    echo "[-] Found .rej files, Stopped! "
+                    PACK_FILES
+                    false
 
-            elif [[ "${{ env.SKIP_PATCH }}" != "true" ]] || [ -z "${{ env.SUSFS_PATCH_FIXED }}" ]; then
-                echo "[+] SUSFS Patch Version: v${SUSFS_VERSION}. "
-                echo "[-] Found .rej files, Stopped! "
-                PACK_FILES
-                false
+                fi
 
             fi
 
