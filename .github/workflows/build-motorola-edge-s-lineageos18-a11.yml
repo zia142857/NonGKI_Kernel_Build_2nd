@@ -1,0 +1,189 @@
+name: Build Motorola Edge S / Moto G100 (LineageOS 18.1 A11)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  # Device env
+  # Motorola Edge S (CN) = Moto G100 (global) = nio / XT2125，平台 kona(sm8250)
+  DEVICE_NAME : "motorola_edge_s"
+  DEVICE_CODENAME : "nio"
+
+  # 内核 4.19.157 + vendor/lineageos_nio_defconfig（savedefconfig 形式，本身即完整配置）
+  # CROSS_COMPILE 由 found_gcc.sh 自动探测，clang 的 --target 也是从它推出来的
+  CUSTOM_CMDS : "CLANG_TRIPLE=aarch64-linux-gnu-"
+  EXTRA_CMDS : "LD=ld.lld LLVM=1"
+
+  KERNEL_SOURCE : "https://github.com/LineageOS/android_kernel_motorola_sm8250.git"
+  KERNEL_BRANCH : "lineage-18.1"
+
+  # LOS 19.1/20 用的就是这颗 r416183b，对 kona 4.19 的 LTO/SCS 支持最完整
+  CLANG_SOURCE : "https://github.com/LineageOS/android_prebuilts_clang_kernel_linux-x86_clang-r416183b.git"
+  CLANG_BRANCH : "lineage-20.0"
+
+  GCC_GNU : false
+  GCC_64_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH : "android12L-release"
+  GCC_32_SOURCE : "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9.git"
+  GCC_32_BRANCH : "android12L-release"
+
+  DEFCONFIG_SOURCE: ""
+  DEFCONFIG_NAME : "vendor/lineageos_nio_defconfig"
+  DEFCONFIG_ORIGIN_IMAGE: ""
+  DEFCONFIG_FROM_BOOT: false
+
+  KERNELSU_SOURCE : ""
+  KERNELSU_BRANCH : ""
+
+  KERNELSU_AUTO_GET : "true" # if u want easy setting kernelsu, u can true.
+  KERNELSU_AUTO_FORK : "bakasu" # xxksu, rsuntk , next, bakasu and sukisu
+
+  # kona 的 defconfig 里 KPROBES 是默认 y，但本项目只提供 syscall / SUSFS inline 两条路；
+  # moto 的 CAF 树对 4.19 通用 SUSFS 补丁兼容性没保证，默认走 manual hook。
+  SUSFS_ENABLE : false
+  SUSFS_FIXED : false
+
+  AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH : "master"
+
+  BOOT_SOURCE : ""
+
+  NEED_DTBO : true
+  NEED_SAFE_DTBO : false
+
+  ROM_TEXT : "lineageos18.1_a11"
+
+  # Other env
+  PYTHON_VERSION: "3" # Only 2(Ubuntu 22.04 and Ubuntu 20.04) or 3(Any OS Versions).
+
+  PACK_METHOD: "AnyKernel3" # AnyKernel3 need SOURCE and BRANCH, MKBOOTIMG needn't it.
+  PACK_KMODULES: "false" # if u want pack kernel modules (.ko) into AnyKernel3.
+
+  KERNELSU_METHOD: "shell" # shell, manual and only.
+
+  PATCHES_SOURCE: "" # 仅在 SUSFS_FIXED=true 时使用 -> [your_name]/[your_patch]
+  PATCHES_BRANCH: "" # -> [your_branch]
+
+  SUSFS_FOLDER_FIXED: "" # Fill in your patch prefix directory here. Leave it blank if there isn't one. -> your_folder
+  SUSFS_PATCH_FIXED: "" # Fill in your patches here. If there are multiple patches, please separate them with a comma. Leave it blank if there isn't one. -> patch1,patch2
+
+  REKERNEL_ENABLE: "false" # if u need Re:Kernel.
+  DROIDSPACES_ENABLE: "false" # if u need Droidspaces or LXC/Docker.
+  NOMOUNT_ENABLE: "false" # if u need NoMount.
+
+  HOOK_METHOD: "syscall" # Manual hook method ->  syscall.
+
+  KPM_ENABLE: "false" # Anyone devices.
+  KPM_INLINE: "false" # Only use it for SukiSU-Ultra.
+  KPM_KPATCH_NEXT: "false" # If u want hook KPatch-Next in build step.
+  KPM_PATCH_SOURCE: "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/refs/heads/main/kpm/patch_linux" # If u want to use KPM Inline,so you need set patch exec file source -> raw.githubusercontent.com/Test/Test/patch .
+
+  BASEBAND_GUARD_ENABLE: "false" #if u want prevent unauthorized writes to critical partitions/device nodes.
+  BASEBAND_GUARD_BOOT: "false" #if u want to protect boot partition.
+
+  GENERATE_DTB: "false" # if u kernel need DTB , but cannot auto generate it. (Only AnyKernel3).
+  GENERATE_CHIP: "qcom" # only supported for qcom and mediatek.
+
+  BUILD_DEBUGGER: "true" # Output build errors.
+  SKIP_PATCH: "false" # Ignore errors found in Patch Debugger.
+
+  BUILD_OTHER_CONFIG: "false" # Merge config files.
+  MERGE_CONFIG_FILES: "vendor/debugfs.config"
+
+  FREE_MORE_SPACE: "true" # if u want get more space, enabled it.
+
+jobs:
+  build-kernel:
+    name: Motorola Edge S / Moto G100 (LineageOS 18.1 A11)
+    runs-on: ubuntu-22.04 # 4.19 老树，22.04 的 glibc / openssl 组合对老内核 host 工具最省事
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: ⏰ Checkout repository
+        uses: actions/checkout@v6
+
+      - name: ⌛️ Compilation environment preparation
+        uses: ./.github/workflows/build-env
+
+      - name: ⚙️ Get necessary tools
+        uses: ./.github/workflows/build-ready
+
+      - name: 🪝 Patch Kernel of SUSFS
+        uses: ./.github/workflows/patch-susfs
+
+      - name: 🔗 Patch for no-kprobe
+        uses: ./.github/workflows/patch-no-kprobe
+
+      - name: 🪛 Extra Kernel Options
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          DEFCONFIG=arch/arm64/configs/${DEFCONFIG_NAME}
+
+          # 1) LOCALVERSION 必须保持 "-lineageos"：ROM 里 /vendor/lib/modules 的 .ko
+          #    是按 4.19.157-lineageos 编的，vermagic 一变这些模块全都加载不上。
+          grep -q '^CONFIG_LOCALVERSION="-lineageos"' "$DEFCONFIG" || echo 'CONFIG_LOCALVERSION="-lineageos"' >> "$DEFCONFIG"
+
+          # 2) 关掉模块签名强制校验。
+          #    defconfig 默认 CONFIG_MODULE_SIG_FORCE=y，而新编的内核带的是本次构建
+          #    新生成的签名密钥，ROM 里那批 .ko 是 ROM 构建时签的，强制校验会让
+          #    音频(wcd938x)/WLAN(qca6390) 等模块全部加载失败。
+          sed -i -e 's/^CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/' "$DEFCONFIG"
+          grep -q '^# CONFIG_MODULE_SIG_FORCE is not set' "$DEFCONFIG" || echo '# CONFIG_MODULE_SIG_FORCE is not set' >> "$DEFCONFIG"
+
+          # 3) 关掉 -Werror（defconfig 里 CONFIG_CC_WERROR=y -> KBUILD_CFLAGS += -Werror）。
+          #    KernelSU / syscall hook 补丁会引入新代码，Clang 12 上任何一个新警告都会
+          #    直接变成编译错误，这里必须让警告只当警告。
+          sed -i -e 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' "$DEFCONFIG"
+          grep -q '^# CONFIG_CC_WERROR is not set' "$DEFCONFIG" || echo '# CONFIG_CC_WERROR is not set' >> "$DEFCONFIG"
+
+          # 4) 去掉 DEBUG_INFO：4.19 + LTO 全量调试信息产物 10G+，对运行没有任何影响
+          sed -i -e 's/^CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/' "$DEFCONFIG"
+
+          # 5) KernelSU 依赖
+          grep -q '^CONFIG_KALLSYMS=y' "$DEFCONFIG" || echo 'CONFIG_KALLSYMS=y' >> "$DEFCONFIG"
+          grep -q '^CONFIG_KALLSYMS_ALL=y' "$DEFCONFIG" || echo 'CONFIG_KALLSYMS_ALL=y' >> "$DEFCONFIG"
+
+          echo "[+] defconfig prepared:"
+          grep -nE 'LOCALVERSION|MODULE_SIG|CC_WERROR|CONFIG_DEBUG_INFO|KALLSYMS|CONFIG_KSU' "$DEFCONFIG" | tail -n 25
+
+      - name: 🧰 Patch Kernel of Re:Kernel
+        uses: ./.github/workflows/patch-rekernel
+
+      - name: 💿 Patch Kernel of Droidspaces
+        uses: ./.github/workflows/patch-droidspaces
+
+      - name: 🔒 Patch Kernel of Baseband Guard
+        uses: ./.github/workflows/patch-baseband-guard
+
+      - name: 🛡️ Patch Kernel of NoMount
+        uses: ./.github/workflows/patch-nomount
+
+      - name: 🚀 Build Process
+        uses: ./.github/workflows/build-process
+
+      - name: ✅ Verify build output
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
+          IMAGE_DIR=out/arch/arm64/boot
+
+          # 该 defconfig 没开 KERNEL_COMPRESSION_GZIP / APPENDED_DTB_IMAGE，产物是裸 Image
+          ls -lh $IMAGE_DIR/Image* 2>/dev/null || true
+          if [ -s "$IMAGE_DIR/Image" ] || [ -s "$IMAGE_DIR/Image.gz" ] || [ -s "$IMAGE_DIR/Image.gz-dtb" ]; then
+            echo "[+] kernel image ok."
+          else
+            echo "[-] No kernel image generated."
+            exit 1
+          fi
+
+          echo "[+] kona dtb / nio dtbo:"
+          find $IMAGE_DIR/dts/vendor/qcom -maxdepth 1 \( -name 'kona-moto-base*.dtb' -o -name 'kona-nio-*.dtbo' \) 2>/dev/null | sort
+
+      - name: 🔩 Pack Process
+        uses: ./.github/workflows/pack-process
+
+      - name: ✏️ Upload Artifacts
+        uses: ./.github/workflows/upload-files
