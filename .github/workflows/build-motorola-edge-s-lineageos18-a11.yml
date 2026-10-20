@@ -113,6 +113,33 @@ jobs:
       - name: ⚙️ Get necessary tools
         uses: ./.github/workflows/build-ready
 
+      - name: 🔧 Unblock BakaSU SUSFS build
+        run: |
+          cd "$GITHUB_WORKSPACE/device_kernel"
+
+          # drivers/kernelsu 是指向 KernelSU/kernel 的软链接，直接对链接路径 sed -i
+          # 会把链接替换成普通文件（GNU sed 的已知行为），必须先解析出真实目录。
+          REAL=$(readlink -f drivers/kernelsu 2>/dev/null)
+          [ -n "$REAL" ] || REAL="KernelSU/kernel"
+          KB="$REAL/Kbuild"
+          echo "[+] KSU kernel dir: $REAL"
+
+          # BakaSU main（日志里是 v4.2.0-rc3）在 CONFIG_KSU_SUSFS=y 时会无条件
+          # include tools/susfs_compat.mk，而那个文件整个内容就是一句
+          #   $(info ... susfs has NOT update with latest KernelSU source)
+          #   $(error Please wait susfs update.)
+          # 等于把 SUSFS 编译整个禁掉，属于上游等 simonpunk 更新的占位符。
+          # 上一行 inline_hook_check.mk 已经把 ksu_handle_setresuid / execveat /
+          # faccessat / sys_read / stat / sys_reboot / input_handle_event 全部找到，
+          # 说明内核侧集成是完整的，这里只摘掉这个占位报错。
+          if [ -f "$KB" ] && grep -q 'susfs_compat\.mk' "$KB"; then
+            sed -i '/susfs_compat\.mk/ s/^/#/' "$KB"
+            echo "[+] disabled BakaSU susfs_compat kill-switch:"
+            grep -n 'susfs_compat' "$KB"
+          else
+            echo "[-] susfs_compat.mk include not found (already fixed upstream?), skipped."
+          fi
+
       - name: 🧩 Normalise fs/notify/fdinfo.c for SUSFS
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
