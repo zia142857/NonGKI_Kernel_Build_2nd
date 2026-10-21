@@ -254,6 +254,93 @@ jobs:
       - name: 🛡️ Patch Kernel of NoMount
         uses: ./.github/workflows/patch-nomount
 
+      - name: 🩹 Fix arm64 CPU hotplug panic (rodata ftr_reg write)
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/device_kernel"
+          F=arch/arm64/kernel/cpufeature.c
+
+          # 症状（ramoops 实测，两次复现 PC 与偏移完全一致）：
+          #   Unable to handle kernel write to read-only memory at virtual address ...6fa78
+          #   pc : check_update_ftr_reg+0xa4/0x15c
+          #   lr : update_cpu_features+0x124/0x498
+          #   Call trace: check_update_ftr_reg -> cpuinfo_store_cpu -> secondary_start_kernel
+          #   触发点：suspend 时 "Disabling non-boot CPUs"，唤醒时 "Enabling non-boot CPUs"；
+          #           或手动 echo 1 > /sys/devices/system/cpu/cpuN/online
+          #
+          # 成因：本 SoC 异构（cpu0-3 part 0x805，cpu4-7 part 0xD0D），CTR_EL0 等字段
+          #   大/小核本来就不同。开机时 arm64_ftr_safe_value() 把 arm64_ftr_regs[] 的
+          #   sys_val 改成“安全值”，此后 sys_val 不再等于任何一颗核的原始值，于是之后
+          #   每次有 CPU 上线，update_cpu_ftr_reg() 都会重新执行一次
+          #   `reg->sys_val = arm64_ftr_set_value(...)`。
+          #   开机阶段 smp_init() 早于 mark_readonly()，写入能成功；
+          #   唤醒时热插拔晚于 mark_readonly()，rodata 已只读 → permission fault → panic。
+          #
+          # 两层修法互为保险：
+          #   A) 这个 store 写进去的值其实和原值相同（幂等），改成只在真正变化时才写。
+          #      与原来逐位等价，只是省掉无意义的 store —— 热插拔时彻底不写。
+          #   B) 去掉 arm64_ftr_regs[] 的 const。Clang 12 会把 const 数组里的复合字面量
+          #      放进 .data.rel.ro，mark_rodata_ro() 后锁成只读；去掉 const 让它在万一
+          #      真的需要写的时候也是可写的。
+          #
+          # 不要改成“跳过净化”：setup_cpu_features()（置 sys_caps_initialised）在
+          #   smp_init() 之前就执行完，跳过会让 A55 用上 A77 的缓存行参数，有数据损坏风险。
+
+          grep -q 'update_cpu_ftr_reg' "$F" || { echo "[-] $F: update_cpu_ftr_reg not found, aborting"; exit 1; }
+
+          # ---- A) 只在 sys_val 真正变化时才写 ----
+          python3 - "$F" <<'PY'
+          import io, re, sys
+
+          p = sys.argv[1]
+          s = io.open(p, encoding='utf-8').read()
+
+          if 'sys_new' in s:
+              print('[+] A already applied, skipped')
+              sys.exit(0)
+
+          pat = re.compile(
+              r'([ \t]*)reg->sys_val = arm64_ftr_set_value\(ftrp, reg->sys_val, ftr_new\);[ \t]*\n')
+          m = pat.search(s)
+          if not m:
+              sys.exit('[-] A: update_cpu_ftr_reg store line not found, aborting')
+
+          ind = m.group(1)
+          new = (
+              ind + '/*\n'
+              + ind + ' * arm64_ftr_regs[] is write-protected once the kernel is fully up,\n'
+              + ind + ' * so a store that writes back the very same value faults on CPU\n'
+              + ind + ' * hotplug.  Only store when the sanitised value really changes.\n'
+              + ind + ' */\n'
+              + ind + '{\n'
+              + ind + '\tu64 sys_new = arm64_ftr_set_value(ftrp, reg->sys_val, ftr_new);\n'
+              + '\n'
+              + ind + '\tif (sys_new != reg->sys_val)\n'
+              + ind + '\t\treg->sys_val = sys_new;\n'
+              + ind + '}\n'
+          )
+
+          s = s[:m.start()] + new + s[m.end():]
+          io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
+          print('[+] A applied: skip redundant sys_val stores')
+          PY
+
+          # ---- B) 让这块存储在需要真写时也是可写的 ----
+          if grep -q '^static const struct __ftr_reg_entry {' "$F"; then
+            sed -i 's/^static const struct __ftr_reg_entry {/static struct __ftr_reg_entry {/' "$F"
+            echo "[+] B applied: dropped 'const' from arm64_ftr_regs[]"
+          elif grep -q '^static struct __ftr_reg_entry {' "$F"; then
+            echo "[+] B already applied, skipped"
+          else
+            echo "[-] B: unexpected arm64_ftr_regs declaration, aborting:"
+            grep -n '__ftr_reg_entry' "$F"
+            exit 1
+          fi
+
+          echo "[+] verification:"
+          grep -n '^static .*struct __ftr_reg_entry' "$F"
+          grep -n 'sys_new' "$F"
+
       - name: 🚀 Build Process
         uses: ./.github/workflows/build-process
 
