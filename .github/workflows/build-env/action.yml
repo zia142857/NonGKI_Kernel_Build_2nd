@@ -129,7 +129,16 @@ runs:
             echo "[+] Coccinelle is installed."
 
             # Get MKDTBO tool to System
-            git clone --depth=1 https://android.googlesource.com/platform/system/libufdt $GITHUB_WORKSPACE/mkdtbo
+            for n in 1 2 3 4 5; do
+              if git clone --depth=1 https://android.googlesource.com/platform/system/libufdt "$GITHUB_WORKSPACE/mkdtbo"; then break; fi
+              echo "[!] libufdt clone failed (attempt $n/5), retrying..."
+              rm -rf "$GITHUB_WORKSPACE/mkdtbo"
+              sleep $((n * 10))
+            done
+            if [ ! -d "$GITHUB_WORKSPACE/mkdtbo/utils/src" ]; then
+              echo "[-] libufdt clone failed after 5 attempts (android.googlesource.com unavailable)"
+              exit 1
+            fi
             mv $GITHUB_WORKSPACE/mkdtbo/utils/src/* $GITHUB_WORKSPACE/mkdtbo/
             chmod +x "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py"
             ln -sfn "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py" /usr/bin/mkdtboimg
@@ -178,7 +187,16 @@ runs:
             echo "[+] Coccinelle is installed."
 
             # Get MKDTBO tool to System
-            git clone --depth=1 https://android.googlesource.com/platform/system/libufdt $GITHUB_WORKSPACE/mkdtbo
+            for n in 1 2 3 4 5; do
+              if git clone --depth=1 https://android.googlesource.com/platform/system/libufdt "$GITHUB_WORKSPACE/mkdtbo"; then break; fi
+              echo "[!] libufdt clone failed (attempt $n/5), retrying..."
+              rm -rf "$GITHUB_WORKSPACE/mkdtbo"
+              sleep $((n * 10))
+            done
+            if [ ! -d "$GITHUB_WORKSPACE/mkdtbo/utils/src" ]; then
+              echo "[-] libufdt clone failed after 5 attempts (android.googlesource.com unavailable)"
+              exit 1
+            fi
             mv $GITHUB_WORKSPACE/mkdtbo/utils/src/* $GITHUB_WORKSPACE/mkdtbo/
             chmod +x "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py"
             sudo ln -sfn "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py" /usr/bin/mkdtboimg
@@ -231,7 +249,16 @@ runs:
             rm -f libtinfo5.deb
 
             # Get MKDTBO tool to System
-            git clone --depth=1 https://android.googlesource.com/platform/system/libufdt $GITHUB_WORKSPACE/mkdtbo
+            for n in 1 2 3 4 5; do
+              if git clone --depth=1 https://android.googlesource.com/platform/system/libufdt "$GITHUB_WORKSPACE/mkdtbo"; then break; fi
+              echo "[!] libufdt clone failed (attempt $n/5), retrying..."
+              rm -rf "$GITHUB_WORKSPACE/mkdtbo"
+              sleep $((n * 10))
+            done
+            if [ ! -d "$GITHUB_WORKSPACE/mkdtbo/utils/src" ]; then
+              echo "[-] libufdt clone failed after 5 attempts (android.googlesource.com unavailable)"
+              exit 1
+            fi
             mv $GITHUB_WORKSPACE/mkdtbo/utils/src/* $GITHUB_WORKSPACE/mkdtbo/
             chmod +x "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py"
             sudo ln -sfn "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py" /usr/bin/mkdtboimg
@@ -285,7 +312,16 @@ runs:
             echo "[+] Coccinelle is installed."
 
             # Get MKDTBO tool to System
-            git clone --depth=1 https://android.googlesource.com/platform/system/libufdt $GITHUB_WORKSPACE/mkdtbo
+            for n in 1 2 3 4 5; do
+              if git clone --depth=1 https://android.googlesource.com/platform/system/libufdt "$GITHUB_WORKSPACE/mkdtbo"; then break; fi
+              echo "[!] libufdt clone failed (attempt $n/5), retrying..."
+              rm -rf "$GITHUB_WORKSPACE/mkdtbo"
+              sleep $((n * 10))
+            done
+            if [ ! -d "$GITHUB_WORKSPACE/mkdtbo/utils/src" ]; then
+              echo "[-] libufdt clone failed after 5 attempts (android.googlesource.com unavailable)"
+              exit 1
+            fi
             mv $GITHUB_WORKSPACE/mkdtbo/utils/src/* $GITHUB_WORKSPACE/mkdtbo/
             chmod +x "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py"
             ln -sfn "$GITHUB_WORKSPACE/mkdtbo/mkdtboimg.py" /usr/bin/mkdtboimg
